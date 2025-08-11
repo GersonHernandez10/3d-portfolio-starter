@@ -6,11 +6,10 @@ import * as THREE from 'three'
 
 /* ===== Floor Only ===== */
 function FloorOnly({ scale = 1 }) {
-  const floorMat = new THREE.MeshStandardMaterial({ color: '#a0a0a0' }) // slightly darker gray
+  const floorMat = new THREE.MeshStandardMaterial({ color: '#a0a0a0' }) // gray
 
   return (
     <group scale={scale}>
-      {/* Floor */}
       <mesh material={floorMat} position={[0, -0.025, 0]}>
         <boxGeometry args={[5, 0.05, 5]} />
       </mesh>
@@ -18,15 +17,48 @@ function FloorOnly({ scale = 1 }) {
   )
 }
 
-/* ===== Desk & PC Models ===== */
-function DeskGLB({ position, scale = 1 }) {
+/* ===== Desk & PC ===== */
+function DeskGLB({ position, scale = 1, onClick }) {
   const { scene } = useGLTF('/models/desk.glb')
-  return <primitive object={scene} position={position} scale={scale} />
+  return (
+    <group position={position} scale={scale} onClick={onClick}>
+      <primitive object={scene} />
+    </group>
+  )
 }
 
-function PCGLB({ position, scale = 1 }) {
+function PCGLB({ position, scale = 1, onClick }) {
   const { scene } = useGLTF('/models/PC.glb')
-  return <primitive object={scene} position={position} scale={scale} />
+  return (
+    <group position={position} scale={scale} onClick={onClick}>
+      <primitive object={scene} />
+    </group>
+  )
+}
+
+/* ===== Photo Frame (NEW) ===== */
+function PhotoFrameGLB({ position, rotation = [0, 0, 0], scale = 1, onClick }) {
+  const { scene } = useGLTF('/models/photo_frame.glb')
+  return (
+    <group position={position} rotation={rotation} scale={scale} onClick={onClick}>
+      <primitive object={scene} />
+    </group>
+  )
+}
+function PhotoFrameFallback({ position, rotation = [0, 0, 0], scale = 1, onClick }) {
+  // simple placeholder: black frame + gray "photo"
+  return (
+    <group position={position} rotation={rotation} scale={scale} onClick={onClick}>
+      <mesh>
+        <boxGeometry args={[0.18, 0.12, 0.015]} />
+        <meshStandardMaterial color="#111" />
+      </mesh>
+      <mesh position={[0, 0, -0.0075]}>
+        <planeGeometry args={[0.16, 0.10]} />
+        <meshStandardMaterial color="#666" />
+      </mesh>
+    </group>
+  )
 }
 
 /* ===== Snowboard ===== */
@@ -90,39 +122,69 @@ function PalmTreeFallback({ onClick, position, scale = 1 }) {
 }
 
 /* ===== Main Export ===== */
-export default function Room({ onComputerClick, onSnowboardClick, onSoccerClick, onBeachClick }) {
+export default function Room({
+  onComputerClick,
+  onSnowboardClick,
+  onSoccerClick,
+  onBeachClick,
+  onFrameClick, // optional: click handler for photo frame
+}) {
   return (
     <group>
       {/* Floor */}
       <FloorOnly scale={1} />
 
-      {/* Desk & PC */}
+      {/* Desk + PC + Photo Frame */}
       <Suspense fallback={null}>
-        <DeskGLB position={[0, 0, .07]} scale={0.7} />
-        <PCGLB position={[0, 0.58, 0.000000001]} scale={0.04} onClick={onComputerClick} />
+        <DeskGLB position={[0, 0, 0.07]} scale={0.7} />
+        <PCGLB   position={[0, 0.58, 0.000000001]} scale={0.04} onClick={onComputerClick} />
+
+        {/* Photo frame near the PC — tweak to taste */}
+        <Suspense fallback={
+          <PhotoFrameFallback
+            position={[0.22, 0.34, 0.12]}
+            rotation={[0, Math.PI * -0.08, 0]}
+            scale={0.06}
+            onClick={onFrameClick}
+          />
+        }>
+          <PhotoFrameGLB
+            position={[-0.4, 0.57, 0.17]}
+            rotation={[0, Math.PI * 0.08, 0]}
+            scale={0.06}
+            onClick={onFrameClick}
+          />
+        </Suspense>
       </Suspense>
 
       {/* Snowboard */}
-      <Suspense fallback={<SnowboardFallback onClick={onSnowboardClick} position={[1.5, 0.7, -0.6]} scale={0.9} />}>
+      <Suspense fallback={
+        <SnowboardFallback onClick={onSnowboardClick} position={[1.5, 0.7, -0.6]} scale={0.9} />
+      }>
         <SnowboardGLB onClick={onSnowboardClick} position={[1.5, 0, -0.6]} scale={0.9} />
       </Suspense>
 
       {/* Soccer ball */}
-      <Suspense fallback={<SoccerBallFallback onClick={onSoccerClick} position={[-0.9, 0.12, 0.4]} scale={0.2} />}>
+      <Suspense fallback={
+        <SoccerBallFallback onClick={onSoccerClick} position={[-0.9, 0.12, 0.4]} scale={0.2} />
+      }>
         <SoccerBallGLB onClick={onSoccerClick} position={[-0.9, 0.3, 0.4]} scale={0.2} />
       </Suspense>
 
       {/* Palm tree */}
-      <Suspense fallback={<PalmTreeFallback onClick={onBeachClick} position={[0.9, 0, -1.6]} scale={0.2} />}>
+      <Suspense fallback={
+        <PalmTreeFallback onClick={onBeachClick} position={[0.9, 0, -1.6]} scale={0.2} />
+      }>
         <PalmTreeGLB onClick={onBeachClick} position={[0.9, 0, -1.6]} scale={0.2} />
       </Suspense>
     </group>
   )
 }
 
-/* Preload models */
+/* ===== Preload models ===== */
 useGLTF.preload('/models/desk.glb')
 useGLTF.preload('/models/PC.glb')
+useGLTF.preload('/models/photo_frame.glb')
 useGLTF.preload('/models/snowboard.glb')
 useGLTF.preload('/models/soccer_ball.glb')
 useGLTF.preload('/models/palm_tree.glb')
