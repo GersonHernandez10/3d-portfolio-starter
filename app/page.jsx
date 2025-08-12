@@ -39,36 +39,27 @@ function CameraRig({ mode, pcShot }) {
 }
 
 export default function Page() {
-  // modes: 'wide' | 'deskGroup' | 'pcClose' | 'frameClose'
-  const [mode, setMode] = useState('wide')
-  const [pcShot, setPcShot] = useState(null) // { pos: Vector3, look: Vector3 }
+  const [mode, setMode] = useState('wide')   // 'wide' | 'deskGroup' | 'pcClose' | 'frameClose'
+  const [pcShot, setPcShot] = useState(null) // { pos, look } (THREE.Vector3)
 
-  // Desk-group camera position (used to raycast toward the Screen)
-  const DESK_GROUP_POS = new THREE.Vector3(0.0, 1.0, 0.8)
-
-  /** Build the pcClose shot from the Screen hit (center, normal, height) */
+  // Build the pcClose shot from Screen anchor (WORLD units)
   const handlePCAnchor = useCallback(({ center, normal, height }) => {
     const fovDeg = 50
     const fov = THREE.MathUtils.degToRad(fovDeg)
-    const fill = 0.80 // bezel visible
+    const fill = 0.80 // show a bit of bezel
     const distance = (height / 2) / Math.tan(fov / 2) / fill
 
     const up = new THREE.Vector3(0, 1, 0)
     const right = new THREE.Vector3().crossVectors(normal, up).normalize()
 
-    const upOffset = 0.00
-    const lateralOffset = 0.00
-
     const pos = center.clone()
       .addScaledVector(normal, distance)
-      .addScaledVector(up, upOffset)
-      .addScaledVector(right, lateralOffset)
+      .addScaledVector(up, 0.00)
+      .addScaledVector(right, 0.00)
 
-    const look = center.clone()
-    setPcShot({ pos, look })
+    setPcShot({ pos, look: center.clone() })
   }, [])
 
-  // Click flow
   const onDeskAreaClick = useCallback(() => {
     if (mode === 'wide') setMode('deskGroup')
   }, [mode])
@@ -95,9 +86,8 @@ export default function Page() {
             onDeskAreaClick={onDeskAreaClick}
             onComputerClick={onComputerClick}
             onFrameClick={onFrameClick}
-            onPCAnchor={handlePCAnchor}      // camera anchor from Screen
-            rayFrom={DESK_GROUP_POS}         // where to raycast from
-            pcActive={mode === 'pcClose'}    // power the monitor ON when zoomed
+            onPCAnchor={handlePCAnchor}           // camera anchor from Screen (WORLD)
+            pcActive={mode === 'pcClose'}         // power the monitor ON when zoomed
           />
         </Suspense>
 

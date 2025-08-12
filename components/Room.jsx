@@ -1,4 +1,3 @@
-// components/Room.jsx
 'use client'
 
 import React, {
@@ -35,11 +34,9 @@ function DeskGLB({ position, scale = 1, onClick }) {
   )
 }
 
-/* ========== In-monitor UI (About/Resume/Socials) ========== */
+/* ========== In-monitor UI ========== */
 function ScreenDesktopUI() {
   const [tab, setTab] = useState('about')
-
-  // Only stop propagation on interactive elements (do NOT prevent default)
   const stopBubble = (e) => {
     e.stopPropagation()
     e.nativeEvent?.stopImmediatePropagation?.()
@@ -48,10 +45,7 @@ function ScreenDesktopUI() {
   const Tab = ({ id, children }) => (
     <button
       onPointerDown={stopBubble}
-      onClick={(e) => {
-        stopBubble(e)
-        setTab(id)
-      }}
+      onClick={(e) => { stopBubble(e); setTab(id) }}
       style={{
         background: tab === id ? '#374151' : 'transparent',
         color: '#e5e7eb',
@@ -65,22 +59,20 @@ function ScreenDesktopUI() {
       {children}
     </button>
   )
-
   const A = (props) => (
     <a
       {...props}
       target="_blank"
       rel="noreferrer"
       onPointerDown={stopBubble}
-      onClick={stopBubble} // allow default nav
+      onClick={stopBubble}
       style={{ color: '#60a5fa', ...props.style }}
     />
   )
 
   return (
     <div
-      // Let clicks bubble inside; only specific controls stop it.
-      onWheel={stopBubble} // block orbit scrolling
+      onWheel={stopBubble}
       style={{
         width: '100%',
         height: '100%',
@@ -93,7 +85,7 @@ function ScreenDesktopUI() {
       }}
     >
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,padding:'8px 10px',background:'#111',borderBottom:'1px solid #222'}}>
-        <strong style={{ fontSize: 12 }}>GersonOS</strong>
+        <strong style={{ fontSize: 16 }}>GersonOS</strong>
         <div style={{ display: 'flex', gap: 6 }}>
           <Tab id="about">About</Tab>
           <Tab id="resume">Resume</Tab>
@@ -109,10 +101,8 @@ function ScreenDesktopUI() {
             <p>I love snowboarding, soccer, and clean interactive UI.</p>
           </div>
         )}
-
         {tab === 'resume' && (
           <div style={{ height: '100%' }}>
-            {/* Ensure /public/resume.pdf exists */}
             <iframe
               src="/resume.pdf"
               title="Resume"
@@ -120,15 +110,14 @@ function ScreenDesktopUI() {
             />
           </div>
         )}
-
         {tab === 'socials' && (
           <div>
             <h3 style={{ margin: '6px 0 8px 0', fontSize: 16 }}>Connect</h3>
             <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 8 }}>
-              <li><A href="https://github.com/yourhandle">GitHub</A></li>
-              <li><A href="https://linkedin.com/in/yourhandle">LinkedIn</A></li>
-              <li><A href="mailto:you@example.com">Email</A></li>
-              <li><A href="https://twitter.com/yourhandle">X / Twitter</A></li>
+              <li><A href="https://github.com/GersonHernandez10">GitHub</A></li>
+              <li><A href="https://linkedin.com/in/gerson-hernandez-lima-0408212b6">LinkedIn</A></li>
+              <li><A href="mailto:gersonhernandez950@gmail.com">Email</A></li>
+              <li><A href="https://www.instagram.com/813.gerson/">Instagram</A></li>
             </ul>
           </div>
         )}
@@ -137,19 +126,23 @@ function ScreenDesktopUI() {
   )
 }
 
-/* ======= PC with aligned overlay + power-on fade ======= */
+/* ======= PC with axis-corrected overlay & proper DOM fitting ======= */
 function PCInteractive({
   position, scale = 1,
   onClick, onAnchor,
   pcActive = false,
-  uiScale = 44,        // your boost
-  bezelMargin = 0.965, // show a touch of the bezel
+  uiScale = 44,
+  bezelMargin = 0.965,   // tweak 1.00–1.03 to kiss the bezel
 }) {
   const groupRef = useRef()
   const { scene } = useGLTF('/models/PC.glb')
 
-  const [info, setInfo] = useState(null) // { localCenter, localEuler, localSize }
+  const [info, setInfo] = useState(null) // { localCenter, localEuler, widthLocal, heightLocal }
   const coverRef = useRef()
+
+  // Axis correction for a mesh authored Z-up and Y-back
+  const FIX_EULER = useMemo(() => new THREE.Euler(-Math.PI / 2, Math.PI, 0), [])
+  const FIX_Q = useMemo(() => new THREE.Quaternion().setFromEuler(FIX_EULER), [FIX_EULER])
 
   // Fade black cover (1 -> 0 when pcActive)
   useFrame((_, dt) => {
@@ -162,80 +155,86 @@ function PCInteractive({
 
   useLayoutEffect(() => {
     const screen = scene.getObjectByName('Screen')
-    if (!screen) {
-      console.warn('PCInteractive: name the monitor glass mesh exactly "Screen" in PC.glb.')
+    if (!screen || !screen.geometry) {
+      console.warn('PCInteractive: Mesh named "Screen" with geometry not found.')
       return
     }
 
+    // Bounds in mesh-local space
+    screen.geometry.computeBoundingBox()
+    const gbox = screen.geometry.boundingBox.clone()
+    const gsize = gbox.getSize(new THREE.Vector3())
+
+    // Transform of Screen relative to PC group (for DOM placement)
     groupRef.current?.updateWorldMatrix(true, true)
-    scene.updateMatrixWorld(true)
     screen.updateMatrixWorld(true)
+    const parentInv = new THREE.Matrix4().copy(groupRef.current.matrixWorld).invert()
+    const localMatrix = new THREE.Matrix4().multiplyMatrices(parentInv, screen.matrixWorld)
 
-    // WORLD bbox + center/size
-    const bbox = new THREE.Box3().setFromObject(screen)
-    const worldCenter = bbox.getCenter(new THREE.Vector3())
-    const worldSize   = bbox.getSize(new THREE.Vector3())
+    const localPos = new THREE.Vector3()
+    const localQuat = new THREE.Quaternion()
+    const localScale = new THREE.Vector3()
+    localMatrix.decompose(localPos, localQuat, localScale)
 
-    // Robust outward normal from the screen's world matrix (no ray guesses)
-    const m = screen.matrixWorld
-    const ax = new THREE.Vector3().setFromMatrixColumn(m, 0).normalize()
-    const ay = new THREE.Vector3().setFromMatrixColumn(m, 1).normalize()
-    const az = new THREE.Vector3().setFromMatrixColumn(m, 2).normalize()
-    // choose the axis with the smallest extent as the face normal
-    const smallest = ['x','y','z'].sort((a,b)=>worldSize[a]-worldSize[b])[0]
-    let worldNormal = ({x:ax,y:ay,z:az}[smallest]).clone()
-    // face the camera (assume camera near +Z looking toward origin)
-    const cameraGuess = new THREE.Vector3(0, 1.2, 2.2)
-    if (worldNormal.dot(cameraGuess.clone().sub(worldCenter)) < 0) {
-      worldNormal.multiplyScalar(-1)
-    }
+    // Apply axis-fix to the DOM plane orientation
+    const fixedLocalQuat = localQuat.clone().multiply(FIX_Q)
+    const fixedLocalEuler = new THREE.Euler().setFromQuaternion(fixedLocalQuat)
 
-    // Orient an object so +Z points out of the glass
-    const orientWorld = new THREE.Object3D()
-    orientWorld.position.copy(worldCenter)
-    orientWorld.lookAt(worldCenter.clone().sub(worldNormal)) // +Z outward
+    // WORLD center & normal (for camera anchors)
+    const geomCenterLocal = gbox.getCenter(new THREE.Vector3())
+    const worldCenter = geomCenterLocal.applyMatrix4(screen.matrixWorld)
+    const worldQuat = screen.getWorldQuaternion(new THREE.Quaternion()).multiply(FIX_Q)
+    const worldScale = screen.getWorldScale(new THREE.Vector3())
 
-    const parent = groupRef.current
-    const parentInv = new THREE.Matrix4().copy(parent.matrixWorld).invert()
+    let worldNormal = new THREE.Vector3(0, 0, 1).applyQuaternion(worldQuat).normalize()
+    const wideCam = new THREE.Vector3(-1.8, 1.4, 2.6)
+    if (worldNormal.dot(wideCam.clone().sub(worldCenter)) < 0) worldNormal.multiplyScalar(-1)
 
-    const localCenter = worldCenter.clone().applyMatrix4(parentInv)
+    // Choose width/height from the two largest local dimensions (ignore depth)
+    const localDims = [
+      gsize.x * localScale.x,
+      gsize.y * localScale.y,
+      gsize.z * localScale.z,
+    ].sort((a, b) => b - a)
+    const widthLocal = localDims[0]
+    const heightLocal = localDims[1]
 
-    const parentWorldQuat = parent.getWorldQuaternion(new THREE.Quaternion())
-    const localQuat = orientWorld.quaternion.clone().premultiply(parentWorldQuat.invert())
-    const localEuler = new THREE.Euler().setFromQuaternion(localQuat)
+    // World height for FOV distance math
+    const worldDims = [
+      gsize.x * worldScale.x,
+      gsize.y * worldScale.y,
+      gsize.z * worldScale.z,
+    ].sort((a, b) => b - a)
+    const worldHeight = worldDims[1]
 
-    // Convert world size → local units (uniform-ish scale assumption)
-    const parentScale = parent.getWorldScale(new THREE.Vector3())
-    const uniform = (parentScale.x + parentScale.y + parentScale.z) / 3
-    const localSize = worldSize.clone().divideScalar(uniform)
+    setInfo({ localCenter: localPos, localEuler: fixedLocalEuler, widthLocal, heightLocal })
+    onAnchor?.({ center: worldCenter, normal: worldNormal, height: worldHeight })
+  }, [scene, onAnchor, FIX_Q])
 
-    setInfo({ localCenter, localEuler, localSize })
-    onAnchor?.({ center: worldCenter, normal: worldNormal, height: Math.max(worldSize.y, worldSize.x) })
-  }, [scene, onAnchor])
-
-  // CSS render size for DOM (resolution only)
+  // Pretend pixel size for the DOM plane (keeps aspect consistent)
   const cssSize = useMemo(() => {
-    if (!info) return { w: 1000, h: 600 }
-    const aspect = info.localSize.x / info.localSize.y
+    if (!info) return { w: 1200, h: 675 } // default ~16:9
+    const aspect = info.widthLocal / info.heightLocal
     const w = 1200
     const h = Math.round(w / aspect)
     return { w, h }
   }, [info])
 
-  // Fit DOM plane to glass width with bezel margin
+  // Fit by BOTH width and height; choose limiting scale
   const htmlScaleLocal = useMemo(() => {
     if (!info) return 1
-    return (info.localSize.x * bezelMargin) / cssSize.w
-  }, [info, cssSize.w, bezelMargin])
+    const sW = (info.widthLocal * bezelMargin) / cssSize.w
+    const sH = (info.heightLocal * bezelMargin) / cssSize.h
+    return Math.min(sW, sH)
+  }, [info, cssSize.w, cssSize.h, bezelMargin])
 
-  // Slight offset in front of glass, but in local units (ignore parent scaling)
+  // Slight offset in front of the glass (in local units)
   const localZ = useMemo(() => {
     if (!info) return 0.02
     const s = groupRef.current?.getWorldScale(new THREE.Vector3()).x ?? 1
     return 0.02 / s
   }, [info])
 
-  // While UI is active, don't let clicks collapse the PC
   const safeOnClick = pcActive ? undefined : onClick
 
   return (
@@ -244,32 +243,28 @@ function PCInteractive({
 
       {info && (
         <group position={info.localCenter} rotation={info.localEuler}>
-          {/* Black screen cover — does NOT catch pointer/raycast */}
-          <mesh
-            ref={coverRef}
-            position={[0, 0, localZ * 0.3]}
-            // Make sure it never blocks clicks/rays
-            raycast={() => null}
-          >
-            <planeGeometry args={[info.localSize.x * 0.995, info.localSize.y * 0.995]} />
+          {/* Black cover – fill the glass exactly */}
+          <mesh ref={coverRef} position={[0, 0, localZ * 0.3]} raycast={() => null}>
+            <planeGeometry args={[info.widthLocal * 1.0, info.heightLocal * 1.0]} />
             <meshStandardMaterial color="#090c12" opacity={1} />
           </mesh>
 
-          {/* UI overlay — auto-fit * your boost */}
+          {/* DOM overlay – give it explicit pixel size so it fills the plane */}
           <Html
             transform
             portal={{}}
             zIndexRange={[100, 0]}
-            // most important to make the DOM clickable
             pointerEvents="auto"
             style={{ pointerEvents: 'auto' }}
             onPointerDown={(e)=>{ e.stopPropagation() }}
             onWheel={(e)=>{ e.stopPropagation() }}
             position={[0, 0, localZ]}
-            rotation={[0, Math.PI, 0]}           // flip if text appears mirrored
-            scale={htmlScaleLocal * uiScale}     // <— your requested scaling behavior
-            >
-            <ScreenDesktopUI />
+            rotation={[0, Math.PI, 0]}     // your chosen un-mirror
+            scale={htmlScaleLocal * uiScale}
+          >
+            <div style={{ width: `${cssSize.w}px`, height: `${cssSize.h}px` }}>
+              <ScreenDesktopUI />
+            </div>
           </Html>
         </group>
       )}
@@ -387,7 +382,6 @@ export default function Room({
   onPCAnchor,
   pcActive = false,
 }) {
-  // client-only preloads (avoid SSR URL errors)
   useEffect(() => {
     useGLTF.preload('/models/desk.glb')
     useGLTF.preload('/models/PC.glb')
@@ -413,7 +407,7 @@ export default function Room({
           onAnchor={onPCAnchor}
           pcActive={pcActive}
           uiScale={44}
-          bezelMargin={0.965}
+          bezelMargin={0.98}  // try 1.00–1.02 for tighter fit
         />
 
         <Suspense fallback={
