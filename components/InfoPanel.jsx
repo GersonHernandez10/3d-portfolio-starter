@@ -1,10 +1,10 @@
 'use client'
 
 const socials = [
-  { label: 'LinkedIn', href: 'https://linkedin.com/in/yourhandle' },
-  { label: 'GitHub', href: 'https://github.com/yourhandle' },
-  { label: 'X/Twitter', href: 'https://twitter.com/yourhandle' },
-  { label: 'Email', href: 'mailto:you@example.com' },
+  { label: 'LinkedIn', href: 'linkedin.com/in/gerson-hernandez-lima-0408212b6' },
+  { label: 'GitHub', href: 'https://github.com/GersonHernandez10' },
+  { label: 'Instagram', href: 'https://www.instagram.com/813.gerson/' },
+  { label: 'Email', href: 'mailto:gersonhernandez950@gmail.com' },
 ]
 
 export default function InfoPanel({ openKey, onClose }) {

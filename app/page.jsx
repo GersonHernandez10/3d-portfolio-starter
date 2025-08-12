@@ -14,7 +14,7 @@ function dampVec3(cur, target, lambda, dt) {
   cur.z = THREE.MathUtils.damp(cur.z, target.z, lambda, dt)
 }
 
-/* Camera driver with silky motion */
+/* Smooth camera driver */
 function CameraRig({ mode, pcShot }) {
   const { camera } = useThree()
   const lookRef = useRef(new THREE.Vector3())
@@ -23,7 +23,7 @@ function CameraRig({ mode, pcShot }) {
     () => ({
       wide:      { pos: new THREE.Vector3(-1.8, 1.4, 2.6), look: new THREE.Vector3(0, 0.7, 0.1) },
       deskGroup: { pos: new THREE.Vector3( 0.0, 1.0, 0.8),  look: new THREE.Vector3(0, 0.60, 0.10) },
-      frameClose:{ pos: new THREE.Vector3(-0.18, 0.93, 0.86), look: new THREE.Vector3(-0.40, 0.57, 0.17) },
+      frameClose:{ pos: new THREE.Vector3(-0.28, 0.7, 0.5), look: new THREE.Vector3(-0.40, 0.57, 0.17) },
     }),
     []
   )
@@ -43,27 +43,21 @@ export default function Page() {
   const [mode, setMode] = useState('wide')
   const [pcShot, setPcShot] = useState(null) // { pos: Vector3, look: Vector3 }
 
-  // This is where the deskGroup camera sits 
+  // Desk-group camera position (used to raycast toward the Screen)
   const DESK_GROUP_POS = new THREE.Vector3(0.0, 1.0, 0.8)
 
-  /** Build a perfect pcClose shot:
-   * - 'center', 'normal', 'height' come from the actual Screen ray hit
-   * - compute distance from FOV so bezel is visible (fill < 1)
-   */
+  /** Build the pcClose shot from the Screen hit (center, normal, height) */
   const handlePCAnchor = useCallback(({ center, normal, height }) => {
     const fovDeg = 50
     const fov = THREE.MathUtils.degToRad(fovDeg)
-
-    //  margin so the white frame shows
-    const fill = .90 // 80% of view height
+    const fill = 0.80 // bezel visible
     const distance = (height / 2) / Math.tan(fov / 2) / fill
-
-    // Optional micro offsets
-    const upOffset = 0.00
-    const lateralOffset = 0.00
 
     const up = new THREE.Vector3(0, 1, 0)
     const right = new THREE.Vector3().crossVectors(normal, up).normalize()
+
+    const upOffset = 0.00
+    const lateralOffset = 0.00
 
     const pos = center.clone()
       .addScaledVector(normal, distance)
@@ -101,15 +95,16 @@ export default function Page() {
             onDeskAreaClick={onDeskAreaClick}
             onComputerClick={onComputerClick}
             onFrameClick={onFrameClick}
-            onPCAnchor={handlePCAnchor}                 // receive computed screen anchor
-            rayFrom={DESK_GROUP_POS}                    // pass deskGroup pos for raycast
+            onPCAnchor={handlePCAnchor}      // camera anchor from Screen
+            rayFrom={DESK_GROUP_POS}         // where to raycast from
+            pcActive={mode === 'pcClose'}    // power the monitor ON when zoomed
           />
         </Suspense>
 
         <CameraRig mode={mode} pcShot={pcShot} />
       </Canvas>
 
-      {/* dev buttons (remove later) */}
+      {/* dev buttons (remove anytime) */}
       <div style={{position:'fixed', top:16, left:16, display:'flex', gap:8, zIndex:10}}>
         <button onClick={()=>setMode('wide')}>Wide</button>
         <button onClick={()=>setMode('deskGroup')}>Desk</button>
