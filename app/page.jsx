@@ -1,46 +1,121 @@
 'use client'
 
-import { Canvas } from '@react-three/fiber'
-import { OrbitControls, Html, useProgress } from '@react-three/drei'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import { Suspense, useMemo, useState, useCallback, useRef } from 'react'
+import * as THREE from 'three'
 import dynamic from 'next/dynamic'
-import { useState, Suspense } from 'react'
 
 const Room = dynamic(() => import('../components/Room'), { ssr: false })
-const ResumeModal = dynamic(() => import('../components/ResumeModal'), { ssr: false })
 
-function Loader() {
-  const { progress } = useProgress()
-  return (
-    <Html center>
-      <div style={{padding: 12, background: 'rgba(0,0,0,0.7)', color: 'white', borderRadius: 8}}>
-        Loading {progress.toFixed(0)}%
-      </div>
-    </Html>
+/* Critically damped easing */
+function dampVec3(cur, target, lambda, dt) {
+  cur.x = THREE.MathUtils.damp(cur.x, target.x, lambda, dt)
+  cur.y = THREE.MathUtils.damp(cur.y, target.y, lambda, dt)
+  cur.z = THREE.MathUtils.damp(cur.z, target.z, lambda, dt)
+}
+
+/* Camera driver with silky motion */
+function CameraRig({ mode, pcShot }) {
+  const { camera } = useThree()
+  const lookRef = useRef(new THREE.Vector3())
+
+  const shots = useMemo(
+    () => ({
+      wide:      { pos: new THREE.Vector3(-1.8, 1.4, 2.6), look: new THREE.Vector3(0, 0.7, 0.1) },
+      deskGroup: { pos: new THREE.Vector3( 0.0, 1.0, 0.8),  look: new THREE.Vector3(0, 0.60, 0.10) },
+      frameClose:{ pos: new THREE.Vector3(-0.18, 0.93, 0.86), look: new THREE.Vector3(-0.40, 0.57, 0.17) },
+    }),
+    []
   )
+
+  useFrame((_, dt) => {
+    const target = (mode === 'pcClose' && pcShot) ? pcShot : (shots[mode] ?? shots.wide)
+    dampVec3(camera.position, target.pos, 5.0, dt)
+    dampVec3(lookRef.current, target.look, 5.0, dt)
+    camera.lookAt(lookRef.current)
+  })
+
+  return null
 }
 
 export default function Page() {
-  const [resumeOpen, setResumeOpen] = useState(false)
+  // modes: 'wide' | 'deskGroup' | 'pcClose' | 'frameClose'
+  const [mode, setMode] = useState('wide')
+  const [pcShot, setPcShot] = useState(null) // { pos: Vector3, look: Vector3 }
+
+  // This is where the deskGroup camera sits 
+  const DESK_GROUP_POS = new THREE.Vector3(0.0, 1.0, 0.8)
+
+  /** Build a perfect pcClose shot:
+   * - 'center', 'normal', 'height' come from the actual Screen ray hit
+   * - compute distance from FOV so bezel is visible (fill < 1)
+   */
+  const handlePCAnchor = useCallback(({ center, normal, height }) => {
+    const fovDeg = 50
+    const fov = THREE.MathUtils.degToRad(fovDeg)
+
+    //  margin so the white frame shows
+    const fill = .90 // 80% of view height
+    const distance = (height / 2) / Math.tan(fov / 2) / fill
+
+    // Optional micro offsets
+    const upOffset = 0.00
+    const lateralOffset = 0.00
+
+    const up = new THREE.Vector3(0, 1, 0)
+    const right = new THREE.Vector3().crossVectors(normal, up).normalize()
+
+    const pos = center.clone()
+      .addScaledVector(normal, distance)
+      .addScaledVector(up, upOffset)
+      .addScaledVector(right, lateralOffset)
+
+    const look = center.clone()
+    setPcShot({ pos, look })
+  }, [])
+
+  // Click flow
+  const onDeskAreaClick = useCallback(() => {
+    if (mode === 'wide') setMode('deskGroup')
+  }, [mode])
+
+  const onComputerClick = useCallback(() => {
+    if (mode === 'wide') setMode('deskGroup')
+    else if (mode === 'deskGroup') setMode('pcClose')
+  }, [mode])
+
+  const onFrameClick = useCallback(() => {
+    if (mode === 'wide') setMode('deskGroup')
+    else if (mode === 'deskGroup') setMode('frameClose')
+  }, [mode])
 
   return (
-    <div style={{height: '100vh', width: '100vw', overflow: 'hidden'}}>
-      <Canvas camera={{ position: [0, 1.5, 3], fov: 50 }}>
-        <ambientLight intensity={0.8} />
+    <div style={{ height: '100vh', width: '100vw', overflow: 'hidden' }}>
+      <Canvas camera={{ position: [-1.8, 1.4, 2.6], fov: 50 }}>
+        <color attach="background" args={['#0b0f16']} />
+        <ambientLight intensity={0.9} />
         <directionalLight position={[5,5,5]} intensity={1.2} />
-        <Suspense fallback={<Loader />}>
-          <Room onComputerClick={() => setResumeOpen(true)} />
+
+        <Suspense fallback={null}>
+          <Room
+            onDeskAreaClick={onDeskAreaClick}
+            onComputerClick={onComputerClick}
+            onFrameClick={onFrameClick}
+            onPCAnchor={handlePCAnchor}                 // receive computed screen anchor
+            rayFrom={DESK_GROUP_POS}                    // pass deskGroup pos for raycast
+          />
         </Suspense>
-        <OrbitControls enablePan={true} enableDamping={true} />
+
+        <CameraRig mode={mode} pcShot={pcShot} />
       </Canvas>
 
-      {/* UI overlay */}
-      <div style={{position:'fixed', top:16, left:16, display:'flex', gap:12}}>
-        <a href="/" style={{padding:'8px 12px', background:'#111', color:'#fff', borderRadius:8, textDecoration:'none'}}>Home</a>
-        <button onClick={()=>setResumeOpen(true)} style={{padding:'8px 12px', background:'#2563eb', color:'#fff', border:'none', borderRadius:8, cursor:'pointer'}}>Open Resume</button>
-        <a href="mailto:you@example.com" style={{padding:'8px 12px', background:'#111', color:'#fff', borderRadius:8, textDecoration:'none'}}>Contact</a>
+      {/* dev buttons (remove later) */}
+      <div style={{position:'fixed', top:16, left:16, display:'flex', gap:8, zIndex:10}}>
+        <button onClick={()=>setMode('wide')}>Wide</button>
+        <button onClick={()=>setMode('deskGroup')}>Desk</button>
+        <button onClick={()=>setMode('pcClose')}>PC</button>
+        <button onClick={()=>setMode('frameClose')}>Frame</button>
       </div>
-
-      <ResumeModal open={resumeOpen} onClose={()=>setResumeOpen(false)} />
     </div>
   )
 }
