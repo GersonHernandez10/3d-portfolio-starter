@@ -86,15 +86,15 @@ export default function Page() {
             onDeskAreaClick={onDeskAreaClick}
             onComputerClick={onComputerClick}
             onFrameClick={onFrameClick}
-            onPCAnchor={handlePCAnchor}      // camera anchor from Screen 
-            pcActive={mode === 'pcClose'}     // power the monitor ON when zoomed
+            onPCAnchor={handlePCAnchor}           // camera anchor from Screen (WORLD)
+            pcActive={mode === 'pcClose'}         // powers the monitor smoothly based on view
           />
         </Suspense>
 
         <CameraRig mode={mode} pcShot={pcShot} />
       </Canvas>
 
-      {/* dev buttons  */}
+      {/* dev buttons (remove anytime) */}
       <div style={{position:'fixed', top:16, left:16, display:'flex', gap:8, zIndex:10}}>
         <button onClick={()=>setMode('wide')}>Wide</button>
         <button onClick={()=>setMode('deskGroup')}>Desk</button>
