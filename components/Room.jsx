@@ -34,7 +34,7 @@ function DeskGLB({ position, scale = 1, onClick }) {
   )
 }
 
-/* ========== In-monitor UI ========== */
+/* ========== In-monitor UI  ========== */
 function ScreenDesktopUI() {
   const [tab, setTab] = useState('about')
   const stopBubble = (e) => {
@@ -51,14 +51,18 @@ function ScreenDesktopUI() {
         color: '#e5e7eb',
         border: '1px solid #374151',
         borderRadius: 6,
-        padding: '6px 10px',
+        padding: '8px 12px',
         cursor: 'pointer',
-        fontSize: 12,
+        fontSize: 25,
+        fontFamily: "'VT323', monospace",
+        WebkitFontSmoothing: 'none',
+        textShadow: '0 0 2px rgba(255,255,255,0.2)',
       }}
     >
       {children}
     </button>
   )
+
   const A = (props) => (
     <a
       {...props}
@@ -70,69 +74,167 @@ function ScreenDesktopUI() {
     />
   )
 
-  return (
+  // simple text+image row
+  const TextMediaRow = ({ children, imgSrc, imgAlt, reverse = false }) => (
     <div
-      onWheel={stopBubble}
       style={{
-        width: '100%',
-        height: '100%',
-        color: '#e5e7eb',
-        fontFamily: 'Inter, system-ui, sans-serif',
-        display: 'flex',
-        flexDirection: 'column',
-        background: '#0b1220',
-        pointerEvents: 'auto',
+        display: 'grid',
+        gridTemplateColumns: reverse ? '1fr 1.2fr' : '1.2fr 1fr',
+        gap: 12,
+        alignItems: 'center',
+        marginTop: 12,
       }}
     >
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,padding:'8px 10px',background:'#111',borderBottom:'1px solid #222'}}>
-        <strong style={{ fontSize: 16 }}>GersonOS</strong>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <Tab id="about">About</Tab>
-          <Tab id="resume">Resume</Tab>
-          <Tab id="socials">Socials</Tab>
+      {!reverse && (
+        <div style={{ lineHeight: 1 }}>
+          {children}
+        </div>
+      )}
+      <div
+        style={{
+          position: 'relative',
+          width: '100%',
+          aspectRatio: '16 / 9',
+          borderRadius: 8,
+          overflow: 'hidden',
+        }}
+      >
+        <img
+          src={imgSrc}
+          alt={imgAlt}
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+        />
+      </div>
+      {reverse && (
+        <div style={{ lineHeight: 1 }}>
+          {children}
+        </div>
+      )}
+    </div>
+  )
+
+  return (
+    <>
+      {/* load pixel font just for this subtree */}
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=VT323&display=swap"
+      />
+      <div
+        onWheel={stopBubble}
+        style={{
+          width: '100%',
+          height: '100%',
+          color: '#e5e7eb',
+          fontFamily: "'VT323', monospace",
+          fontSize: 35,
+          lineHeight: 1,
+          WebkitFontSmoothing: 'none',
+          MozOsxFontSmoothing: 'grayscale',
+          textShadow: '0 0 2px rgba(255,255,255,0.15)',
+          display: 'flex',
+          flexDirection: 'column',
+          background: '#434549ff',
+          pointerEvents: 'auto',
+        }}
+      >
+        <div style={{
+          display:'flex',
+          alignItems:'center',
+          justifyContent:'space-between',
+          gap:8,
+          padding:'8px 10px',
+          background:'#111',
+          borderBottom:'1px solid #222'
+        }}>
+          <strong style={{ fontSize: 30 }}>GersonOS</strong>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Tab id="about">About</Tab>
+            <Tab id="resume">Resume</Tab>
+            <Tab id="socials">Socials</Tab>
+          </div>
+        </div>
+
+        <div style={{ flex: 1, overflow: 'auto', padding: 12 }}>
+          {tab === 'about' && (
+            <div>
+              <h3 style={{ margin: '6px 0 8px 0', fontSize: 60 }}>About Me</h3>
+
+              {/* Core intro paragraph  */}
+              <p style={{ margin: '6px 0 10px 0' }}>
+                Hi, I’m <span style={{ color:'#a7f3d0' }}>Gerson Hernandez Lima</span>. I'm a junior at Middlebury College pursuing a degree in <span style={{ color:'#fcd34d' }}>Computer Science</span>. 
+                I’m an aspiring Software Engineer with a strong passion for <span style={{ color:'#34d399' }}>data analysis</span> and building impactful, <span style={{ color:'#c084fc' }}>user-centered technology</span>. 
+                I am of <span style={{ color:'#f59e0b' }}>hispanic</span> origins and I was raised in <span style={{ color:'#f59e0b' }}>Tampa</span>, <span style={{ color:'#60a5fa' }}>Florida</span> (thats why there is a palm tree in the background lol) .
+              </p>
+
+              {/* Experience paragraph  */}
+              <p style={{ margin: '6px 0 10px 0' }}>
+                I’ve worked on projects that blend technical problem-solving with real-world applications—from streamlining donation processing for <span style={{ color:'#fca5a5' }}>Patagonia Education</span> with a 
+                custom multi-step platform using <span style={{ color:'#93c5fd' }}>Stripe</span> and automated email workflows, to improving admin dashboards and payments for 
+                <span style={{ color:'#86efac' }}> MiddDash</span>, Middlebury’s student-run food delivery service. My technical toolkit includes Java, Python, C, TypeScript, HTML, and R, and I’m comfortable with 
+                <span style={{ color:'#60a5fa' }}> API integrations</span>, <span style={{ color:'#f59e0b' }}>database management</span>, and building <span style={{ color:'#34d399' }}>responsive web apps</span>. I thrive in collaborative spaces where I can ship polished, reliable features.
+              </p>
+
+              {/* Snowboarding */}
+              <TextMediaRow imgSrc="/snowboarding.jpg" imgAlt="Snowboarding at Middlebury Snow Bowl">
+                <p style={{ margin: 0 }}>
+                  Outside of tech, I’m a lifelong athlete and a big soccer fan (BIG <span style={{ color:'#004D98' }}>FC</span> <span style={{ color:'#A50044' }}>Barcelona</span> fan). My favorite hobby is <span style={{ color:'#67e8f9' }}>Snowboarding</span>. Middlebury <span style={{ color:'#60a5fa' }}>Snow Bowl</span> was my first mountain and the place that hooked me. 
+                  I even created a <span style={{ color:'#fbbf24' }}>3D model</span> of my exact board so you can see it <em>outside</em> the computer in this scene (look around the room, the board is modeled right there).
+                </p>
+              </TextMediaRow>
+
+              {/* Musician  */}
+              <TextMediaRow imgSrc="/bass_guitar.jpeg" imgAlt="Playing bass guitar" reverse>
+                <p style={{ margin: 0 }}>
+                  I’m also a musician and have been playing <span style={{ color:'#f472b6' }}>bass guitar</span> for over seven years. Whether I’m learning a new riff or exploring a new framework, 
+                  I’m driven by curiosity, discipline, and the urge to keep growing.
+                </p>
+              </TextMediaRow>
+
+              <div style={{ marginTop: 16 }}>
+                <h4 style={{ fontSize: 36, margin: '10px 0 6px 0' }}>Let’s Connect</h4>
+                <p style={{ margin: 0 }}>
+                  I’m always open to collaborating on thoughtful projects and exploring new challenges in
+                  software engineering and data-driven solutions.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {tab === 'resume' && (
+            <div style={{ height: '100%' }}>
+              <iframe
+                src="/resume.pdf"
+                title="Resume"
+                style={{ width: '100%', height: '100%', border: 'none', background: '#0b0f16' }}
+              />
+            </div>
+          )}
+
+          {tab === 'socials' && (
+            <div>
+              <h3 style={{ margin: '6px 0 8px 0', fontSize: 22 }}>Connect</h3>
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 8 }}>
+                <li><A href="https://github.com/GersonHernandez10">GitHub</A></li>
+                <li><A href="https://linkedin.com/in/gerson-hernandez-lima-0408212b6">LinkedIn</A></li>
+                <li><A href="mailto:gersonhernandez950@gmail.com">Email</A></li>
+                <li><A href="https://www.instagram.com/813.gerson/">Instagram</A></li>
+              </ul>
+            </div>
+          )}
         </div>
       </div>
-
-      <div style={{ flex: 1, overflow: 'auto', padding: 12, fontSize: 14, lineHeight: 1.55 }}>
-        {tab === 'about' && (
-          <div>
-            <h3 style={{ margin: '6px 0 8px 0', fontSize: 16 }}>About Me</h3>
-            <p>Hello I’m Gerson Hernandez and I built this interactive 3D Portfolio.</p>
-            <p>I love snowboarding, soccer, and clean interactive UI.</p>
-          </div>
-        )}
-        {tab === 'resume' && (
-          <div style={{ height: '100%' }}>
-            <iframe
-              src="/resume.pdf"
-              title="Resume"
-              style={{ width: '100%', height: '100%', border: 'none', background: '#0b0f16' }}
-            />
-          </div>
-        )}
-        {tab === 'socials' && (
-          <div>
-            <h3 style={{ margin: '6px 0 8px 0', fontSize: 16 }}>Connect</h3>
-            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 8 }}>
-              <li><A href="https://github.com/GersonHernandez10">GitHub</A></li>
-              <li><A href="https://linkedin.com/in/gerson-hernandez-lima-0408212b6">LinkedIn</A></li>
-              <li><A href="mailto:gersonhernandez950@gmail.com">Email</A></li>
-              <li><A href="https://www.instagram.com/813.gerson/">Instagram</A></li>
-            </ul>
-          </div>
-        )}
-      </div>
-    </div>
+    </>
   )
 }
 
-/* ======= PC with axis-corrected overlay & proper DOM fitting ======= */
+/* ======= PC with DOM CRT overlay dual flicker for light UIs ======= */
 function PCInteractive({
   position, scale = 1,
   onClick, onAnchor,
   pcActive = false,
   uiScale = 44,
-  bezelMargin = 0.965,   // tweak 1.00–1.03 to kiss the bezel
+  bezelMargin = 0.98,
 }) {
   const groupRef = useRef()
   const { scene } = useGLTF('/models/PC.glb')
@@ -144,7 +246,6 @@ function PCInteractive({
   const FIX_EULER = useMemo(() => new THREE.Euler(-Math.PI / 2, Math.PI, 0), [])
   const FIX_Q = useMemo(() => new THREE.Quaternion().setFromEuler(FIX_EULER), [FIX_EULER])
 
-  // Fade black cover (1 -> 0 when pcActive)
   useFrame((_, dt) => {
     const mat = coverRef.current?.material
     if (!mat) return
@@ -160,12 +261,10 @@ function PCInteractive({
       return
     }
 
-    // Bounds in mesh-local space
     screen.geometry.computeBoundingBox()
     const gbox = screen.geometry.boundingBox.clone()
     const gsize = gbox.getSize(new THREE.Vector3())
 
-    // Transform of Screen relative to PC group (for DOM placement)
     groupRef.current?.updateWorldMatrix(true, true)
     screen.updateMatrixWorld(true)
     const parentInv = new THREE.Matrix4().copy(groupRef.current.matrixWorld).invert()
@@ -176,11 +275,9 @@ function PCInteractive({
     const localScale = new THREE.Vector3()
     localMatrix.decompose(localPos, localQuat, localScale)
 
-    // Apply axis-fix to the DOM plane orientation
     const fixedLocalQuat = localQuat.clone().multiply(FIX_Q)
     const fixedLocalEuler = new THREE.Euler().setFromQuaternion(fixedLocalQuat)
 
-    // WORLD center & normal (for camera anchors)
     const geomCenterLocal = gbox.getCenter(new THREE.Vector3())
     const worldCenter = geomCenterLocal.applyMatrix4(screen.matrixWorld)
     const worldQuat = screen.getWorldQuaternion(new THREE.Quaternion()).multiply(FIX_Q)
@@ -190,7 +287,6 @@ function PCInteractive({
     const wideCam = new THREE.Vector3(-1.8, 1.4, 2.6)
     if (worldNormal.dot(wideCam.clone().sub(worldCenter)) < 0) worldNormal.multiplyScalar(-1)
 
-    // Choose width/height from the two largest local dimensions (ignore depth)
     const localDims = [
       gsize.x * localScale.x,
       gsize.y * localScale.y,
@@ -199,7 +295,6 @@ function PCInteractive({
     const widthLocal = localDims[0]
     const heightLocal = localDims[1]
 
-    // World height for FOV distance math
     const worldDims = [
       gsize.x * worldScale.x,
       gsize.y * worldScale.y,
@@ -211,16 +306,14 @@ function PCInteractive({
     onAnchor?.({ center: worldCenter, normal: worldNormal, height: worldHeight })
   }, [scene, onAnchor, FIX_Q])
 
-  // Pretend pixel size for the DOM plane (keeps aspect consistent)
   const cssSize = useMemo(() => {
-    if (!info) return { w: 1200, h: 675 } // default ~16:9
+    if (!info) return { w: 1200, h: 675 }
     const aspect = info.widthLocal / info.heightLocal
     const w = 1200
     const h = Math.round(w / aspect)
     return { w, h }
   }, [info])
 
-  // Fit by BOTH width and height; choose limiting scale
   const htmlScaleLocal = useMemo(() => {
     if (!info) return 1
     const sW = (info.widthLocal * bezelMargin) / cssSize.w
@@ -228,7 +321,6 @@ function PCInteractive({
     return Math.min(sW, sH)
   }, [info, cssSize.w, cssSize.h, bezelMargin])
 
-  // Slight offset in front of the glass (in local units)
   const localZ = useMemo(() => {
     if (!info) return 0.02
     const s = groupRef.current?.getWorldScale(new THREE.Vector3()).x ?? 1
@@ -243,13 +335,13 @@ function PCInteractive({
 
       {info && (
         <group position={info.localCenter} rotation={info.localEuler}>
-          {/* Black cover – fill the glass exactly */}
+          {/* black cover just behind the DOM */}
           <mesh ref={coverRef} position={[0, 0, localZ * 0.3]} raycast={() => null}>
             <planeGeometry args={[info.widthLocal * 1.0, info.heightLocal * 1.0]} />
             <meshStandardMaterial color="#090c12" opacity={1} />
           </mesh>
 
-          {/* DOM overlay – give it explicit pixel size so it fills the plane */}
+          {/* DOM overlay with CRT stack (works on light or dark UI) */}
           <Html
             transform
             portal={{}}
@@ -259,11 +351,115 @@ function PCInteractive({
             onPointerDown={(e)=>{ e.stopPropagation() }}
             onWheel={(e)=>{ e.stopPropagation() }}
             position={[0, 0, localZ]}
-            rotation={[0, Math.PI, 0]}     // your chosen un-mirror
+            rotation={[0, Math.PI, 0]}
             scale={htmlScaleLocal * uiScale}
           >
-            <div style={{ width: `${cssSize.w}px`, height: `${cssSize.h}px` }}>
-              <ScreenDesktopUI />
+            <div
+              style={{
+                position: 'relative',
+                width: `${cssSize.w}px`,
+                height: `${cssSize.h}px`,
+                overflow: 'hidden',
+                filter: 'contrast(1.12) saturate(0.92) hue-rotate(-5deg)',
+              }}
+            >
+              {/* UI */}
+              <div style={{ width:'100%', height:'100%' }}>
+                <ScreenDesktopUI />
+              </div>
+
+              {/* scanlines */}
+              <div
+                className="crt-scan"
+                style={{
+                  pointerEvents:'none',
+                  position:'absolute', inset:0,
+                  mixBlendMode:'multiply',
+                  backgroundImage:
+                    'repeating-linear-gradient(to bottom, rgba(0,0,0,0.35) 0px, rgba(0,0,0,0.35) 1px, rgba(0,0,0,0.0) 2px)',
+                  backgroundSize: '100% 2px',
+                }}
+              />
+
+              {/* dot-pitch */}
+              <div
+                style={{
+                  pointerEvents:'none',
+                  position:'absolute', inset:0,
+                  mixBlendMode:'multiply',
+                  backgroundImage:
+                    'repeating-linear-gradient(to right, rgba(0,0,0,0.08) 0 1px, rgba(0,0,0,0) 1px 3px), repeating-linear-gradient(to bottom, rgba(0,0,0,0.08) 0 1px, rgba(0,0,0,0) 1px 3px)',
+                  backgroundSize: '3px 3px, 3px 3px',
+                }}
+              />
+
+              {/* vignette */}
+              <div
+                style={{
+                  pointerEvents:'none',
+                  position:'absolute', inset:0,
+                  background:
+                    'radial-gradient(60% 60% at 50% 50%, rgba(0,0,0,0) 60%, rgba(0,0,0,0.16) 100%)',
+                }}
+              />
+
+              {/* grain */}
+              <div
+                style={{
+                  pointerEvents:'none',
+                  position:'absolute', inset:0,
+                  mixBlendMode:'multiply',
+                  backgroundImage: `url("data:image/svg+xml;utf8,\
+<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'>\
+<filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter>\
+<rect width='100%' height='100%' filter='url(%23n)' opacity='0.05'/></svg>")`,
+                  backgroundSize: '128px 128px',
+                  animation: 'grainMove 2.4s steps(30) infinite',
+                }}
+              />
+
+              {/* dual flicker */}
+              <div
+                className="crt-flicker-bright"
+                style={{
+                  pointerEvents:'none',
+                  position:'absolute', inset:0,
+                  background: 'rgba(255,255,255,0.04)',
+                  mixBlendMode:'screen',
+                  animation: 'crtFlickerBright 1s steps(60) infinite',
+                }}
+              />
+              <div
+                className="crt-flicker-dark"
+                style={{
+                  pointerEvents:'none',
+                  position:'absolute', inset:0,
+                  background: 'rgba(0,0,0,0.06)',
+                  mixBlendMode:'multiply',
+                  animation: 'crtFlickerDark 1s steps(60) infinite',
+                }}
+              />
+
+              {/* chroma fringe */}
+              <div
+                style={{
+                  pointerEvents:'none',
+                  position:'absolute', inset:0,
+                  mixBlendMode:'screen',
+                  background: `
+                    radial-gradient(80% 80% at 50% 50%, rgba(255,0,0,0.00) 55%, rgba(255,0,0,0.05) 100%),
+                    radial-gradient(80% 80% at 50% 50%, rgba(0,255,255,0.00) 55%, rgba(0,255,255,0.04) 100%)
+                  `,
+                }}
+              />
+
+              <style>{`
+                @keyframes crtFlickerBright { 0%{opacity:.02}50%{opacity:.06}100%{opacity:.02} }
+                @keyframes crtFlickerDark   { 0%{opacity:.02}50%{opacity:.05}100%{opacity:.02} }
+                @keyframes scanDrift        { 0%{background-position-y:0px}100%{background-position-y:1px} }
+                .crt-scan { animation: scanDrift 6s linear infinite alternate; }
+                @keyframes grainMove        { 0%{background-position:0 0}100%{background-position:64px 64px} }
+              `}</style>
             </div>
           </Html>
         </group>
@@ -407,7 +603,7 @@ export default function Room({
           onAnchor={onPCAnchor}
           pcActive={pcActive}
           uiScale={44}
-          bezelMargin={0.98}  // try 1.00–1.02 for tighter fit
+          bezelMargin={0.98}
         />
 
         <Suspense fallback={

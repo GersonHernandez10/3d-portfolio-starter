@@ -44,7 +44,7 @@ export default function Page() {
 
   // Build the pcClose shot from Screen anchor (WORLD units)
   const handlePCAnchor = useCallback(({ center, normal, height }) => {
-    const fovDeg = 50
+    const fovDeg = 46
     const fov = THREE.MathUtils.degToRad(fovDeg)
     const fill = 0.80 // show a bit of bezel
     const distance = (height / 2) / Math.tan(fov / 2) / fill
@@ -86,15 +86,15 @@ export default function Page() {
             onDeskAreaClick={onDeskAreaClick}
             onComputerClick={onComputerClick}
             onFrameClick={onFrameClick}
-            onPCAnchor={handlePCAnchor}           // camera anchor from Screen (WORLD)
-            pcActive={mode === 'pcClose'}         // power the monitor ON when zoomed
+            onPCAnchor={handlePCAnchor}      // camera anchor from Screen 
+            pcActive={mode === 'pcClose'}     // power the monitor ON when zoomed
           />
         </Suspense>
 
         <CameraRig mode={mode} pcShot={pcShot} />
       </Canvas>
 
-      {/* dev buttons (remove anytime) */}
+      {/* dev buttons  */}
       <div style={{position:'fixed', top:16, left:16, display:'flex', gap:8, zIndex:10}}>
         <button onClick={()=>setMode('wide')}>Wide</button>
         <button onClick={()=>setMode('deskGroup')}>Desk</button>
