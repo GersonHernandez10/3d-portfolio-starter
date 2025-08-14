@@ -655,7 +655,7 @@ function PCInteractive({
                         backgroundImage: `url("data:image/svg+xml;utf8,\
 <svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'>\
 <filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter>\
-<rect width='100%' height='100%' filter='url(%23n)' opacity='0.05'/></svg>")`,
+<rect width="100%" height="100%" filter="url(%23n)" opacity="0.05"/></svg>")`,
                         backgroundSize: '128px 128px',
                         animation: 'grainMove 2.4s steps(30) infinite',
                         opacity: power,
@@ -980,6 +980,72 @@ function PencilsFallback({ position, rotation = [0,0,0], scale = 1 }) {
   )
 }
 
+/* ==================== NEW Barça corner  ==================== */
+function GrassGLB({ position, rotation=[0,0,0], scale=1 }) {
+  const { scene } = useGLTF('/models/grass.glb')
+  useEffect(() => { enableShadows(scene, { cast: false, receive: true }) }, [scene])
+  return (
+    <group position={position} rotation={rotation} scale={scale} raycast={() => null}>
+      <primitive object={scene} />
+    </group>
+  )
+}
+function GrassFallback({ position, rotation=[0,0,0], scale=1 }) {
+  return (
+    <mesh position={position} rotation={rotation} scale={scale} receiveShadow>
+      <boxGeometry args={[1.6, 0.02, 1.0]} />
+      <meshStandardMaterial color="#166534" />
+    </mesh>
+  )
+}
+
+function GoalNetGLB({ position, rotation=[0,0,0], scale=1 }) {
+  const { scene } = useGLTF('/models/NetFinal.glb')
+  useEffect(() => { enableShadows(scene, { cast: true, receive: true }) }, [scene])
+  return (
+    <group position={position} rotation={rotation} scale={scale}>
+      <primitive object={scene} />
+    </group>
+  )
+}
+function GoalNetFallback({ position, rotation=[0,0,0], scale=1 }) {
+  return (
+    <group position={position} rotation={rotation} scale={scale}>
+      {/* simple posts */}
+      <mesh castShadow>
+        <boxGeometry args={[1.6, 0.05, 0.05]} />
+        <meshStandardMaterial color="#ddd" />
+      </mesh>
+      <mesh position={[-0.8, -0.4, -0.6]} castShadow>
+        <boxGeometry args={[0.05, 0.8, 1.2]} />
+        <meshStandardMaterial color="#ddd" />
+      </mesh>
+      <mesh position={[0.8, -0.4, -0.6]} castShadow>
+        <boxGeometry args={[0.05, 0.8, 1.2]} />
+        <meshStandardMaterial color="#ddd" />
+      </mesh>
+    </group>
+  )
+}
+
+function BarcaLogoGLB({ position, rotation=[0,0,0], scale=1 }) {
+  const { scene } = useGLTF('/models/logos_barcelona.glb')
+  useEffect(() => { enableShadows(scene, { cast: true, receive: false }) }, [scene])
+  return (
+    <group position={position} rotation={rotation} scale={scale}>
+      <primitive object={scene} />
+    </group>
+  )
+}
+function BarcaLogoFallback({ position, rotation=[0,0,0], scale=1 }) {
+  return (
+    <mesh position={position} rotation={rotation} scale={scale} castShadow>
+      <boxGeometry args={[0.4, 0.5, 0.02]} />
+      <meshStandardMaterial color="#A50044" />
+    </mesh>
+  )
+}
+
 /* ================= Main Export ================= */
 export default function Room({
   onDeskAreaClick,
@@ -1005,7 +1071,19 @@ export default function Room({
     useGLTF.preload('/models/psp.glb')
     useGLTF.preload('/models/RubixCube.glb')
     useGLTF.preload('/models/pencils.glb')
+
+    /* NEW: preload Barça corner */
+    useGLTF.preload('/models/grass.glb')
+    useGLTF.preload('/models/NetFinal.glb')
+    useGLTF.preload('/models/logos_barcelona.glb')
   }, [])
+
+ 
+  const GOAL_POS = useMemo(() => [0, 0, -1.5], [])
+  const GOAL_SCALE = 0.9
+  const BALL_POS = useMemo(() => [0.0, 0.12, -1.35], []) // inside the net, a bit forward
+  const LOGO_POS = useMemo(() => [-.95, 0.009, -1.4], [])
+  const LOGO_ROT = useMemo(() => [0, Math.PI, 0], []) // face into the room
 
   return (
     <group>
@@ -1017,7 +1095,7 @@ export default function Room({
         <DeskGLB position={[-0.02, 0.053, 0.065]} scale={0.225} onClick={onDeskAreaClick} />
 
         <PCInteractive
-          position={[0, 0.58, 0.000000001]}
+          position={[0.05, 0.58, 0.000000001]}
           scale={0.04}
           onClick={onComputerClick}
           onAnchor={onPCAnchor}
@@ -1052,14 +1130,14 @@ export default function Room({
           <GamingChairFallback
             position={[-0.6, 0, 0.5]}
             rotation={[0, Math.PI / 2, 0]}
-            scale={0.5}
+            scale={0.45}
           />
         }
       >
         <GamingChairGLB
-          position={[-0.5, 0, 0.8]}
-          rotation={[0, Math.PI / 1.9, 0]}
-          scale={0.4}
+          position={[0.3, 0, 0.7]}
+          rotation={[0, Math.PI / 2.7, 0]}
+          scale={0.3}
         />
       </Suspense>
 
@@ -1073,19 +1151,20 @@ export default function Room({
           />
         }
       >
-        <SnowboardGLB onClick={onSnowboardClick} position={[1.5, 0, -0.6]} scale={0.9} />
+        <SnowboardGLB onClick={onSnowboardClick} position={[-.004, .5, -1.2]} scale={0.7} />
       </Suspense>
 
+      {/*  */}
       <Suspense
         fallback={
           <SoccerBallFallback
             onClick={onSoccerClick}
-            position={[-0.9, 0.12, 0.4]}
+            position={BALL_POS}
             scale={0.2}
           />
         }
       >
-        <SoccerBallGLB onClick={onSoccerClick} position={[-0.9, 0.3, 0.4]} scale={0.2} />
+        <SoccerBallGLB onClick={onSoccerClick} position={[-.8,0.24,-0.9]} scale={.2} />
       </Suspense>
 
       <Suspense
@@ -1093,8 +1172,30 @@ export default function Room({
           <PalmTreeFallback onClick={onBeachClick} position={[0.9, 0, -1.6]} scale={0.2} />
         }
       >
-        <PalmTreeGLB onClick={onBeachClick} position={[0.9, 0, -1.6]} scale={0.2} />
+        <PalmTreeGLB onClick={onBeachClick} position={[1.6, 0, -1]} scale={0.2} />
       </Suspense>
+
+      {/* ========= Desk-top props  ========= */}
+      {/* Books  */}
+      <Suspense fallback={<BooksFallback position={[0.4, 0.585, 0.2]} scale={0.4} />}>
+        <BooksGLB position={[0.4, 0.585, 0.2]} scale={0.4} />
+      </Suspense>
+
+      {/* PSP  */}
+      <Suspense fallback={<PSPFallback position={[0.4, 0.62, 0.2]} rotation={[0, Math.PI * 0.12, 0]} scale={1} />}>
+        <PSPGLB position={[0.4, 0.62, 0.2]} rotation={[0, Math.PI * 0.12, 0]} scale={1} />
+      </Suspense>
+
+      {/* Rubiks cube  */}
+      <Suspense fallback={<RubixCubeFallback position={[-0.3, 0.585, 0.17]} scale={0.35} />}>
+        <RubixCubeGLB position={[-0.5, 0.578, 0.2]} scale={0.35} />
+      </Suspense>
+
+      {/* Pencil */}
+      <Suspense fallback={<PencilsFallback position={[-0.3, 0.61, 0.02]} rotation={[0, Math.PI * 0.25, 0]} scale={0.02} />}>
+        <PencilsGLB position={[-0.3, 0.605, 0.2]} rotation={[0, Math.PI * 0.25, 0]} scale={0.02} />
+      </Suspense>
+      {/* ========= /NEW ========= */}
     </group>
   )
 }
