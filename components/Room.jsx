@@ -222,10 +222,10 @@ function ScreenDesktopUI({ power = 1 }) {
             <div style={{ opacity: power }}>
               <h3 style={{ margin: '6px 0 8px 0', fontSize: 22 }}>Connect</h3>
               <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 8 }}>
-                <li><A href="https://github.com/GersonHernandez10">GitHub</A></li>
-                <li><A href="https://linkedin.com/in/gerson-hernandez-lima-0408212b6">LinkedIn</A></li>
-                <li><A href="mailto:gersonhernandez950@gmail.com">Email</A></li>
-                <li><A href="https://www.instagram.com/813.gerson/">Instagram</A></li>
+                <li><a href="https://github.com/GersonHernandez10" target="_blank" rel="noreferrer" style={{ color:'#60a5fa', opacity: power }}>GitHub</a></li>
+                <li><a href="https://linkedin.com/in/gerson-hernandez-lima-0408212b6" target="_blank" rel="noreferrer" style={{ color:'#60a5fa', opacity: power }}>LinkedIn</a></li>
+                <li><a href="mailto:gersonhernandez950@gmail.com" target="_blank" rel="noreferrer" style={{ color:'#60a5fa', opacity: power }}>Email</a></li>
+                <li><a href="https://www.instagram.com/813.gerson/" target="_blank" rel="noreferrer" style={{ color:'#60a5fa', opacity: power }}>Instagram</a></li>
               </ul>
             </div>
           )}
@@ -276,8 +276,12 @@ function PCInteractive({
   const rollRef = useRef(0)
   const rollingRef = useRef(false)
 
+  /* Toggle to enable/disable vertical roll without deleting code */
+  const ROLL_ENABLED = true
+
   // Occasional vertical roll (rare, subtle)
   useEffect(() => {
+    if (!ROLL_ENABLED) return
     let alive = true, t, raf
 
     const schedule = () => {
@@ -288,13 +292,12 @@ function PCInteractive({
 
     const start = () => {
       if (!alive) return
-      // Only roll if screen is effectively on
       if (powerRef.current <= 0.6 || rollingRef.current) return schedule()
 
       rollingRef.current = true
-      const durUp = 900 + Math.random() * 600   // 0.9–1.5s up
-      const durDown = 500 + Math.random() * 500 // 0.5–1.0s down
-      const maxShift = -(12 + Math.random() * 24) // -12 to -36 px (upwards)
+      const durUp = 900 + Math.random() * 600
+      const durDown = 500 + Math.random() * 500
+      const maxShift = -(12 + Math.random() * 24)
 
       const t0 = performance.now()
       const animate = (now) => {
@@ -302,12 +305,10 @@ function PCInteractive({
         const dt = now - t0
 
         if (dt <= durUp) {
-          // ease-out up
           const p = dt / durUp
           const ease = 1 - Math.pow(1 - p, 2)
           rollRef.current = maxShift * ease
         } else if (dt <= durUp + durDown) {
-          // ease-back down
           const p = (dt - durUp) / durDown
           const ease = 1 - Math.pow(1 - p, 2)
           rollRef.current = maxShift * (1 - ease)
@@ -327,7 +328,7 @@ function PCInteractive({
 
     schedule()
     return () => { alive = false; clearTimeout(t); cancelAnimationFrame(raf) }
-  }, [rollY]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [rollY, ROLL_ENABLED]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Schedule occasional green horizontal line
   useEffect(() => {
@@ -336,7 +337,7 @@ function PCInteractive({
       const delay = 4000 + Math.random() * 8000 // 4–12s
       t1 = setTimeout(() => {
         if (!alive) return
-        if (powerRef.current > 0.6) {
+        if (powerRef.current > 0.3) { // lower gate so it actually fires
           setGreenLineY(Math.random())
           setGreenLineOn(true)
           t2 = setTimeout(() => { if (alive) setGreenLineOn(false) }, 120 + Math.random() * 220)
@@ -355,7 +356,7 @@ function PCInteractive({
       const delay = 6000 + Math.random() * 10000 // 6–16s
       t1 = setTimeout(() => {
         if (!alive) return
-        if (powerRef.current > 0.6) {
+        if (powerRef.current > 0.3) { // lower gate so it actually fires
           setGreenTearX(Math.random())
           setGreenTearW(1 + Math.round(Math.random())) // 1 or 2 px
           setGreenTearOn(true)
@@ -413,7 +414,7 @@ function PCInteractive({
     const s = shutterRef.current
     const closingShape = (1 - s) * s * 4
     const shaped = THREE.MathUtils.clamp(closingShape, 0, 1)
-    const hold = Math.max(0, 1 - (now - (streakHoldRef.current || 0)) / STREAK_HOLD_MS)
+    const hold = Math.max(0, 1 - (now - (streakHoldRef.current || 0)) / 260)
     const targetStreak = !effectiveActive ? Math.max(shaped, hold) : 0
 
     streakRef.current = THREE.MathUtils.damp(streakRef.current, targetStreak, 8.0, dt)
@@ -535,13 +536,9 @@ function PCInteractive({
 
               const shutterClip = `inset(${topBottomPct}% ${sidePct}% ${topBottomPct}% ${sidePct}% round ${R}px)`
 
-              // --------- White streak visuals ----------
-              const bandH = Math.max(2, H * (0.015 + 0.06 * Math.max(0, shutter)))
-              const bandGlow = Math.max(6, bandH * 2.6)
-
               // Subtle CRT curvature params
-              const CURVE_RX = 0.6  // deg
-              const CURVE_RY = -0.6 // deg
+              const CURVE_RX = 0.6
+              const CURVE_RY = -0.6
 
               return (
                 <div
@@ -564,12 +561,12 @@ function PCInteractive({
                     clipPath: shutterClip,
                     overflow:'hidden',
                   }}>
-                    {/* UI with vertical roll */}
+                    {/* UI with (optional) vertical roll */}
                     <div
                       style={{
                         width: '100%',
                         height: '100%',
-                        transform: `translateY(${rollY}px)`,
+                        transform: `translateY(${ROLL_ENABLED ? rollY : 0}px)`,
                         willChange: 'transform'
                       }}
                     >
@@ -577,7 +574,7 @@ function PCInteractive({
                     </div>
 
                     {/* Edge masks during roll to hide seams (subtle) */}
-                    {Math.abs(rollY) > 0.5 && (
+                    {ROLL_ENABLED && Math.abs(rollY) > 0.5 && (
                       <>
                         <div
                           style={{
@@ -705,16 +702,16 @@ function PCInteractive({
 
                     {/* --- random green horizontal glitch line --- */}
                     {greenLineOn && (
-                      <div style={{ pointerEvents:'none', position:'absolute', inset:0 }}>
+                      <div style={{ pointerEvents:'none', position:'absolute', inset:0, zIndex: 6 }}>
                         <div
                           style={{
                             position:'absolute',
                             left:0, right:0,
                             top: `calc(${(greenLineY * 100).toFixed(2)}% - 1px)`,
                             height:'2px',
-                            background: 'linear-gradient(to bottom, rgba(0,255,0,0) 0%, rgba(0,255,140,0.85) 50%, rgba(0,255,0,0) 100%)',
+                            background: 'linear-gradient(to bottom, rgba(0,255,0,0) 0%, rgba(0,255,140,0.95) 50%, rgba(0,255,0,0) 100%)',
                             filter: 'blur(0.3px)',
-                            opacity: power,
+                            opacity: Math.min(1, power + 0.25),
                             mixBlendMode:'screen',
                           }}
                         />
@@ -724,9 +721,9 @@ function PCInteractive({
                             left:0, right:0,
                             top: `calc(${(greenLineY * 100).toFixed(2)}% - 6px)`,
                             height:'12px',
-                            background: 'linear-gradient(to bottom, rgba(0,255,100,0) 0%, rgba(0,255,100,0.2) 50%, rgba(0,255,100,0) 100%)',
+                            background: 'linear-gradient(to bottom, rgba(0,255,100,0) 0%, rgba(0,255,100,0.28) 50%, rgba(0,255,100,0) 100%)',
                             filter: 'blur(1px)',
-                            opacity: power,
+                            opacity: Math.min(1, power + 0.15),
                             mixBlendMode:'screen',
                           }}
                         />
@@ -735,16 +732,16 @@ function PCInteractive({
 
                     {/* --- random green vertical tear  --- */}
                     {greenTearOn && (
-                      <div style={{ pointerEvents:'none', position:'absolute', inset:0 }}>
+                      <div style={{ pointerEvents:'none', position:'absolute', inset:0, zIndex: 6 }}>
                         <div
                           style={{
                             position:'absolute',
                             top:0, bottom:0,
                             left: `calc(${(greenTearX * 100).toFixed(2)}% - ${greenTearW/2}px)`,
                             width: `${greenTearW}px`,
-                            background: 'linear-gradient(to right, rgba(0,255,120,0), rgba(0,255,120,0.85), rgba(0,255,120,0))',
+                            background: 'linear-gradient(to right, rgba(0,255,120,0), rgba(0,255,120,0.95), rgba(0,255,120,0))',
                             filter: 'blur(0.4px)',
-                            opacity: power,
+                            opacity: Math.min(1, power + 0.25),
                             mixBlendMode:'screen',
                           }}
                         />
@@ -754,9 +751,9 @@ function PCInteractive({
                             top:0, bottom:0,
                             left: `calc(${(greenTearX * 100).toFixed(2)}% - 6px)`,
                             width:'12px',
-                            background: 'linear-gradient(to right, rgba(0,255,120,0), rgba(0,255,120,0.22), rgba(0,255,120,0))',
+                            background: 'linear-gradient(to right, rgba(0,255,120,0), rgba(0,255,120,0.26), rgba(0,255,120,0))',
                             filter: 'blur(1px)',
-                            opacity: power,
+                            opacity: Math.min(1, power + 0.15),
                             mixBlendMode:'screen',
                           }}
                         />
@@ -780,48 +777,14 @@ function PCInteractive({
                           position: 'absolute',
                           left: 0,
                           right: 0,
-                          top: `calc(50% - ${bandH / 2}px)`,
-                          height: `${bandH}px`,
+                          top: `calc(50% - ${Math.max(2, (cssSize.h * 0.90) * (0.015 + 0.06 * Math.max(0, 1))) / 2}px)`,
+                          height: `${Math.max(2, (cssSize.h * 0.90) * (0.015 + 0.06))}px`,
                           background:
                             'linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,0.92) 50%, rgba(255,255,255,0) 100%)',
                         }}
                       />
-                      <div
-                        style={{
-                          position: 'absolute',
-                          left: 0,
-                          right: 0,
-                          top: `calc(50% - ${bandGlow / 2}px)`,
-                          height: `${bandGlow}px`,
-                          background:
-                            'linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,0.28) 50%, rgba(255,255,255,0) 100%)',
-                          filter: 'blur(1.2px)',
-                        }}
-                      />
                     </div>
                   )}
-
-                  {/* Subtle curvature highlight/shadow */}
-                  <div
-                    style={{
-                      pointerEvents:'none',
-                      position:'absolute', inset:0,
-                      background: `
-                        radial-gradient(100% 70% at 50% -10%, rgba(255,255,255,0.06), rgba(255,255,255,0) 40%),
-                        radial-gradient(100% 70% at 50% 110%, rgba(0,0,0,0.28), rgba(0,0,0,0) 40%)
-                      `,
-                      mixBlendMode:'overlay',
-                      opacity: power * 0.9,
-                    }}
-                  />
-
-                  <style>{`
-                    @keyframes crtFlickerBright { 0%{opacity:.02}50%{opacity:.06}100%{opacity:.02} }
-                    @keyframes crtFlickerDark   { 0%{opacity:.02}50%{opacity:.05}100%{opacity:.02} }
-                    @keyframes scanDrift        { 0%{background-position-y:0px}100%{background-position-y:1px} }
-                    .crt-scan { animation: scanDrift 6s linear infinite alternate; }
-                    @keyframes grainMove        { 0%{background-position:0 0}100%{background-position:64px 64px} }
-                  `}</style>
                 </div>
               )
             })()}
@@ -936,6 +899,87 @@ function PalmTreeFallback({ onClick, position, scale = 1 }) {
   )
 }
 
+/* ==================== NEW: Desk-top props ==================== */
+/* Books */
+function BooksGLB({ position, rotation = [0,0,0], scale = 1, onClick }) {
+  const { scene } = useGLTF('/models/books.glb')
+  useEffect(() => { enableShadows(scene, { cast: true, receive: true }) }, [scene])
+  return (
+    <group position={position} rotation={rotation} scale={scale} onClick={onClick} raycast={() => null}>
+      <primitive object={scene} />
+    </group>
+  )
+}
+function BooksFallback({ position, rotation = [0,0,0], scale = 1 }) {
+  return (
+    <group position={position} rotation={rotation} scale={scale} raycast={() => null}>
+      <mesh castShadow>
+        <boxGeometry args={[0.18, 0.06, 0.24]} />
+        <meshStandardMaterial color="#8b5cf6" />
+      </mesh>
+    </group>
+  )
+}
+
+/* PSP (on top of books) */
+function PSPGLB({ position, rotation = [0,0,0], scale = 1, onClick }) {
+  const { scene } = useGLTF('/models/psp.glb')
+  useEffect(() => { enableShadows(scene, { cast: true, receive: true }) }, [scene])
+  return (
+    <group position={position} rotation={rotation} scale={scale} onClick={onClick} raycast={() => null}>
+      <primitive object={scene} />
+    </group>
+  )
+}
+function PSPFallback({ position, rotation = [0,0,0], scale = 1 }) {
+  return (
+    <mesh position={position} rotation={rotation} scale={scale} castShadow raycast={() => null}>
+      <boxGeometry args={[0.16, 0.02, 0.07]} />
+      <meshStandardMaterial color="#111" />
+    </mesh>
+  )
+}
+
+/* Rubik's Cube */
+function RubixCubeGLB({ position, rotation = [0,0,0], scale = 1, onClick }) {
+  const { scene } = useGLTF('/models/RubixCube.glb')
+  useEffect(() => { enableShadows(scene, { cast: true, receive: true }) }, [scene])
+  return (
+    <group position={position} rotation={rotation} scale={scale} onClick={onClick} raycast={() => null}>
+      <primitive object={scene} />
+    </group>
+  )
+}
+function RubixCubeFallback({ position, rotation = [0,0,0], scale = 1 }) {
+  return (
+    <mesh position={position} rotation={rotation} scale={scale} castShadow raycast={() => null}>
+      <boxGeometry args={[0.06, 0.06, 0.06]} />
+      <meshStandardMaterial color="#22d3ee" />
+    </mesh>
+  )
+}
+
+/* Pencil holder */
+function PencilsGLB({ position, rotation = [0,0,0], scale = 1, onClick }) {
+  const { scene } = useGLTF('/models/pencils.glb')
+  useEffect(() => { enableShadows(scene, { cast: true, receive: true }) }, [scene])
+  return (
+    <group position={position} rotation={rotation} scale={scale} onClick={onClick} raycast={() => null}>
+      <primitive object={scene} />
+    </group>
+  )
+}
+function PencilsFallback({ position, rotation = [0,0,0], scale = 1 }) {
+  return (
+    <group position={position} rotation={rotation} scale={scale} raycast={() => null}>
+      <mesh castShadow>
+        <cylinderGeometry args={[0.02, 0.02, 0.08, 12]} />
+        <meshStandardMaterial color="#9ca3af" />
+      </mesh>
+    </group>
+  )
+}
+
 /* ================= Main Export ================= */
 export default function Room({
   onDeskAreaClick,
@@ -955,6 +999,12 @@ export default function Room({
     useGLTF.preload('/models/snowboard.glb')
     useGLTF.preload('/models/soccer_ball.glb')
     useGLTF.preload('/models/palm_tree.glb')
+
+    /* NEW: preload desk-top props */
+    useGLTF.preload('/models/books.glb')
+    useGLTF.preload('/models/psp.glb')
+    useGLTF.preload('/models/RubixCube.glb')
+    useGLTF.preload('/models/pencils.glb')
   }, [])
 
   return (
@@ -1045,6 +1095,28 @@ export default function Room({
       >
         <PalmTreeGLB onClick={onBeachClick} position={[0.9, 0, -1.6]} scale={0.2} />
       </Suspense>
+
+      {/* ========= Desk-top props  ========= */}
+      {/* Books  */}
+      <Suspense fallback={<BooksFallback position={[0.4, 0.585, 0.2]} scale={0.4} />}>
+        <BooksGLB position={[0.4, 0.585, 0.2]} scale={0.4} />
+      </Suspense>
+
+      {/* PSP  */}
+      <Suspense fallback={<PSPFallback position={[0.4, 0.62, 0.2]} rotation={[0, Math.PI * 0.12, 0]} scale={1} />}>
+        <PSPGLB position={[0.4, 0.62, 0.2]} rotation={[0, Math.PI * 0.12, 0]} scale={1} />
+      </Suspense>
+
+      {/* Rubiks cube  */}
+      <Suspense fallback={<RubixCubeFallback position={[-0.3, 0.585, 0.17]} scale={0.35} />}>
+        <RubixCubeGLB position={[-0.3, 0.585, 0.17]} scale={0.35} />
+      </Suspense>
+
+      {/* Pencil */}
+      <Suspense fallback={<PencilsFallback position={[-0.3, 0.61, 0.02]} rotation={[0, Math.PI * 0.25, 0]} scale={0.02} />}>
+        <PencilsGLB position={[-0.3, 0.61, 0.02]} rotation={[0, Math.PI * 0.25, 0]} scale={0.02} />
+      </Suspense>
+      {/* ========= /NEW ========= */}
     </group>
   )
 }
