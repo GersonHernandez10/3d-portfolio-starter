@@ -22,6 +22,44 @@ function enableShadows(scene, { cast = true, receive = false } = {}) {
   })
 }
 
+/* --- Fallback helper: one mesh, any geometry --- */
+const GEOMS = {
+  box: (props) => <boxGeometry {...props} />,
+  plane: (props) => <planeGeometry {...props} />,
+  sphere: (props) => <sphereGeometry {...props} />,
+  cylinder: (props) => <cylinderGeometry {...props} />,
+  cone: (props) => <coneGeometry {...props} />,
+}
+function FallbackMesh({
+  type = 'box',
+  args = [],
+  color = '#777',
+  position,
+  rotation,
+  scale = 1,
+  onClick,
+  castShadow = true,
+  receiveShadow = false,
+  raycast, // optional (e.g., () => null)
+  materialProps = {},
+}) {
+  const Geometry = GEOMS[type]
+  return (
+    <mesh
+      position={position}
+      rotation={rotation}
+      scale={scale}
+      onClick={onClick}
+      castShadow={castShadow}
+      receiveShadow={receiveShadow}
+      {...(raycast ? { raycast } : {})}
+    >
+      <Geometry args={args} />
+      <meshStandardMaterial color={color} {...materialProps} />
+    </mesh>
+  )
+}
+
 /* ===== Invisible shadow-catcher ===== */
 function ShadowCatcher({ size = 10, y = -0.001, opacity = 0.42 }) {
   return (
@@ -32,18 +70,32 @@ function ShadowCatcher({ size = 10, y = -0.001, opacity = 0.42 }) {
   )
 }
 
-/* ================= Desk ================= */
-function DeskGLB({ position, scale = 1, onClick }) {
-  const { scene } = useGLTF('/models/desk.glb')
-  useEffect(() => { enableShadows(scene, { cast: true, receive: true }) }, [scene])
+/* ===== Generic GLB wrapper  ===== */
+function GLBModel({
+  path,
+  position,
+  rotation,
+  scale = 1,
+  onClick,
+  cast = true,
+  receive = true,
+  raycast,
+}) {
+  const { scene } = useGLTF(path)
+  useEffect(() => { enableShadows(scene, { cast, receive }) }, [scene, cast, receive])
   return (
-    <group position={position} scale={scale} onClick={onClick}>
+    <group position={position} rotation={rotation} scale={scale} onClick={onClick} {...(raycast ? { raycast } : {})}>
       <primitive object={scene} />
     </group>
   )
 }
 
-/* ========== In-monitor UI (uses `power` to fade/disable) ========== */
+/* ================= Desk ================= */
+const DeskGLB = (props) => (
+  <GLBModel path="/models/desk.glb" cast receive {...props} />
+)
+
+/* ========== In-monitor UI  ========== */
 function ScreenDesktopUI({ power = 1 }) {
   const [tab, setTab] = useState('about')
 
@@ -73,22 +125,6 @@ function ScreenDesktopUI({ power = 1 }) {
     >
       {children}
     </button>
-  )
-
-  const A = (props) => (
-    <a
-      {...props}
-      target="_blank"
-      rel="noreferrer"
-      onPointerDown={stopBubble}
-      onClick={stopBubble}
-      style={{
-        color: '#60a5fa',
-        ...(props.style || {}),
-        opacity: power,
-        transition: 'opacity .15s linear',
-      }}
-    />
   )
 
   const TextMediaRow = ({ children, imgSrc, imgAlt, reverse = false }) => (
@@ -161,6 +197,7 @@ function ScreenDesktopUI({ power = 1 }) {
           <strong style={{ fontSize: 30, opacity: power }}>GersonOS</strong>
           <div style={{ display: 'flex', gap: 10 }}>
             <Tab id="about">About</Tab>
+            <Tab id="work">Experience</Tab>
             <Tab id="resume">Resume</Tab>
             <Tab id="socials">Socials</Tab>
           </div>
@@ -264,6 +301,14 @@ function PCInteractive({
   const streakHoldRef = useRef(0)
   const STREAK_HOLD_MS = 260 // hold briefly after power-off
 
+  // NEW: degauss trigger state
+  const [degauss, setDegauss] = useState(false)
+  const lastOnRef = useRef(false)
+
+  // NEW: ultra-rare colored static burst
+  const [staticBurst, setStaticBurst] = useState(false)
+  const [staticHue, setStaticHue] = useState(0) // 0=red, 60=yellow, 120=green, 180=cyan, 240=blue, 300=magenta
+
   // Random green glitches
   const [greenLineOn, setGreenLineOn] = useState(false)  // horizontal line
   const [greenLineY, setGreenLineY] = useState(0.5)
@@ -275,8 +320,6 @@ function PCInteractive({
   const [rollY, setRollY] = useState(0)
   const rollRef = useRef(0)
   const rollingRef = useRef(false)
-
-  /* Toggle to enable/disable vertical roll without deleting code */
   const ROLL_ENABLED = true
 
   // Occasional vertical roll (rare, subtle)
@@ -328,7 +371,7 @@ function PCInteractive({
 
     schedule()
     return () => { alive = false; clearTimeout(t); cancelAnimationFrame(raf) }
-  }, [rollY, ROLL_ENABLED]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [rollY]) // ROLL_ENABLED is a constant
 
   // Schedule occasional green horizontal line
   useEffect(() => {
@@ -337,7 +380,7 @@ function PCInteractive({
       const delay = 4000 + Math.random() * 8000 // 4–12s
       t1 = setTimeout(() => {
         if (!alive) return
-        if (powerRef.current > 0.3) { // lower gate so it actually fires
+        if (powerRef.current > 0.3) {
           setGreenLineY(Math.random())
           setGreenLineOn(true)
           t2 = setTimeout(() => { if (alive) setGreenLineOn(false) }, 120 + Math.random() * 220)
@@ -356,11 +399,31 @@ function PCInteractive({
       const delay = 6000 + Math.random() * 10000 // 6–16s
       t1 = setTimeout(() => {
         if (!alive) return
-        if (powerRef.current > 0.3) { // lower gate so it actually fires
+        if (powerRef.current > 0.3) {
           setGreenTearX(Math.random())
           setGreenTearW(1 + Math.round(Math.random())) // 1 or 2 px
           setGreenTearOn(true)
           t2 = setTimeout(() => { if (alive) setGreenTearOn(false) }, 90 + Math.random() * 180)
+        }
+        loop()
+      }, delay)
+    }
+    loop()
+    return () => { alive = false; clearTimeout(t1); clearTimeout(t2) }
+  }, [])
+
+  // Schedule ULTRA-RARE colored static burst
+  useEffect(() => {
+    let alive = true, t1, t2
+    const hues = [0, 60, 120, 180, 240, 300] // R, Y, G, C, B, M
+    const loop = () => {
+      const delay = 45000 + Math.random() * 60000 // 45–105s
+      t1 = setTimeout(() => {
+        if (!alive) return
+        if (powerRef.current > 0.6) {
+          setStaticHue(hues[(Math.random() * hues.length) | 0])
+          setStaticBurst(true)
+          t2 = setTimeout(() => { if (alive) setStaticBurst(false) }, 160 + Math.random() * 220) // ~160–380ms
         }
         loop()
       }, delay)
@@ -386,6 +449,13 @@ function PCInteractive({
     }
     const effectiveActive = pcActive && (now - (activatedAtRef.current ?? 0) >= powerOnDelayMs)
 
+    // trigger degauss once on rising edge of effectiveActive
+    if (effectiveActive && !lastOnRef.current) {
+      setDegauss(true)
+      setTimeout(() => setDegauss(false), 900)
+    }
+    lastOnRef.current = effectiveActive
+
     if (lastEffectiveRef.current && !effectiveActive) {
       streakHoldRef.current = now
     }
@@ -399,6 +469,7 @@ function PCInteractive({
     const powerTarget = effectiveActive ? 1 : 0
     powerRef.current = THREE.MathUtils.damp(powerRef.current, powerTarget, 4.0, dt)
 
+    // Push state from refs (throttled by comparison)
     if (Math.abs(powerRef.current - power) > 0.002) setPower(powerRef.current)
     if (Math.abs(shutterRef.current - shutter) > 0.002) setShutter(shutterRef.current)
 
@@ -414,7 +485,7 @@ function PCInteractive({
     const s = shutterRef.current
     const closingShape = (1 - s) * s * 4
     const shaped = THREE.MathUtils.clamp(closingShape, 0, 1)
-    const hold = Math.max(0, 1 - (now - (streakHoldRef.current || 0)) / 260)
+    const hold = Math.max(0, 1 - (now - (streakHoldRef.current || 0)) / STREAK_HOLD_MS)
     const targetStreak = !effectiveActive ? Math.max(shaped, hold) : 0
 
     streakRef.current = THREE.MathUtils.damp(streakRef.current, targetStreak, 8.0, dt)
@@ -541,251 +612,364 @@ function PCInteractive({
               const CURVE_RY = -0.6
 
               return (
-                <div
-                  style={{
-                    position: 'relative',
-                    width: `${W}px`,
-                    height: `${H}px`,
-                    borderRadius: `${R}px`,
-                    overflow: 'hidden',
-                    transform: `perspective(1200px) rotateX(${CURVE_RX}deg) rotateY(${CURVE_RY}deg) translateZ(0)`,
-                    filter: 'contrast(1.12) saturate(0.92) hue-rotate(-5deg)',
-                    background: '#02040a',
-                    boxShadow: 'inset 0 0 22px rgba(0,0,0,0.45), inset 0 0 60px rgba(0,0,0,0.25)',
-                  }}
-                >
-                  {/* MASK: everything inside respects rounded corners + shutter */}
-                  <div style={{
-                    position:'absolute', inset:0,
-                    borderRadius:'inherit',
-                    clipPath: shutterClip,
-                    overflow:'hidden',
-                  }}>
-                    {/* UI with (optional) vertical roll */}
-                    <div
-                      style={{
-                        width: '100%',
-                        height: '100%',
-                        transform: `translateY(${ROLL_ENABLED ? rollY : 0}px)`,
-                        willChange: 'transform'
-                      }}
-                    >
-                      <ScreenDesktopUI power={power} />
-                    </div>
+                <>
+                  {/* Keyframes for degauss, static, stutter */}
+                  <style>{`
+@keyframes crtDegauss {
+  0%   { transform: scale(1.00) rotate(0deg);    filter: none; }
+  12%  { transform: scale(1.06) rotate(0.2deg);  filter: saturate(0.85) contrast(1.05); }
+  28%  { transform: scale(0.98) rotate(-0.15deg); filter: saturate(1.1) contrast(0.95); }
+  45%  { transform: scale(1.03) rotate(0.1deg);   }
+  62%  { transform: scale(0.995) rotate(-0.05deg);}
+  100% { transform: scale(1) rotate(0deg);        filter: none; }
+}
+.crt-degauss { animation: crtDegauss 900ms ease-out; }
 
-                    {/* Edge masks during roll to hide seams (subtle) */}
-                    {ROLL_ENABLED && Math.abs(rollY) > 0.5 && (
-                      <>
-                        <div
-                          style={{
-                            pointerEvents:'none',
-                            position:'absolute',
-                            left:0, right:0, top:0, height:12,
-                            background:'linear-gradient(to bottom, rgba(2,4,10,1), rgba(2,4,10,0))'
-                          }}
-                        />
-                        <div
-                          style={{
-                            pointerEvents:'none',
-                            position:'absolute',
-                            left:0, right:0, bottom:0, height:12,
-                            background:'linear-gradient(to top, rgba(2,4,10,1), rgba(2,4,10,0))'
-                          }}
-                        />
-                      </>
-                    )}
+@keyframes crtRGBShiver {
+  0%, 100% { transform: translate(0,0); opacity: 0; }
+  10% { transform: translate(0.6px, -0.4px); opacity: 0.18; }
+  22% { transform: translate(-0.5px, 0.5px); opacity: 0.14; }
+  36% { transform: translate(0.4px, 0.2px);  opacity: 0.10; }
+  60% { transform: translate(-0.2px, -0.2px); opacity: 0.06; }
+}
 
-                    {/* --- RGB subpixel mask --- */}
-                    <div
-                      style={{
-                        pointerEvents:'none',
-                        position:'absolute', inset:0,
-                        backgroundImage:
-                          'repeating-linear-gradient(to right, rgba(255,0,0,0.06) 0 1px, rgba(0,255,0,0.06) 1px 2px, rgba(0,0,255,0.06) 2px 3px)',
-                        backgroundSize: '3px 100%',
-                        mixBlendMode: 'screen',
-                        opacity: power * 0.4,
-                      }}
-                    />
+/* Rare static: jitter + scroll to fake animated noise */
+@keyframes crtStaticShake {
+  0% { transform: translate(0,0) }
+  25% { transform: translate(-0.6px, 0.4px) }
+  50% { transform: translate(0.7px, -0.5px) }
+  75% { transform: translate(-0.3px, -0.6px) }
+  100% { transform: translate(0,0) }
+}
+@keyframes crtStaticScroll {
+  0% { background-position: 0 0; }
+  100% { background-position: 100% 100%; }
+}
 
-                    {/* scanlines */}
-                    <div
-                      className="crt-scan"
-                      style={{
-                        pointerEvents:'none',
-                        position:'absolute', inset:0,
-                        mixBlendMode:'multiply',
-                        backgroundImage:
-                          'repeating-linear-gradient(to bottom, rgba(0,0,0,0.35) 0px, rgba(0,0,0,0.35) 1px, rgba(0,0,0,0.0) 2px)',
-                        backgroundSize: '100% 2px',
-                        opacity: power,
-                      }}
-                    />
+/* Frame pacing stutter */
+@keyframes crtStutter {
+  0%, 20%, 23%, 50%, 53%, 80%, 83%, 100% { opacity: 1; }
+  21%, 51%, 81% { opacity: 0.94; }
+  22%, 52%, 82% { opacity: 0.88; }
+}
+                  `}</style>
 
-                    {/* dot-pitch grid */}
-                    <div
-                      style={{
-                        pointerEvents:'none',
-                        position:'absolute', inset:0,
-                        mixBlendMode:'multiply',
-                        backgroundImage:
-                          'repeating-linear-gradient(to right, rgba(0,0,0,0.08) 0 1px, rgba(0,0,0,0) 1px 3px), repeating-linear-gradient(to bottom, rgba(0,0,0,0.08) 0 1px, rgba(0,0,0,0) 1px 3px)',
-                        backgroundSize: '3px 3px, 3px 3px',
-                        opacity: power * 0.9,
-                      }}
-                    />
+                  <div
+                    className={degauss ? 'crt-degauss' : undefined}
+                    style={{
+                      position: 'relative',
+                      width: `${W}px`,
+                      height: `${H}px`,
+                      borderRadius: `${R}px`,
+                      overflow: 'hidden',
+                      transform: `perspective(1200px) rotateX(${CURVE_RX}deg) rotateY(${CURVE_RY}deg) translateZ(0)`,
+                      filter: 'contrast(1.12) saturate(0.92) hue-rotate(-5deg)',
+                      background: '#02040a',
+                      boxShadow: 'inset 0 0 22px rgba(0,0,0,0.45), inset 0 0 60px rgba(0,0,0,0.25)',
+                    }}
+                  >
+                    {/* MASK: everything inside respects rounded corners + shutter */}
+                    <div style={{
+                      position:'absolute', inset:0,
+                      borderRadius:'inherit',
+                      clipPath: shutterClip,
+                      overflow:'hidden',
+                    }}>
+                      {/* UI with (optional) vertical roll */}
+                      <div
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          transform: `translateY(${ROLL_ENABLED ? rollY : 0}px)`,
+                          willChange: 'transform'
+                        }}
+                      >
+                        <ScreenDesktopUI power={power} />
+                      </div>
 
-                    {/* vignette */}
-                    <div
-                      style={{
-                        pointerEvents:'none',
-                        position:'absolute', inset:0,
-                        background:
-                          'radial-gradient(60% 60% at 50% 50%, rgba(0,0,0,0) 60%, rgba(0,0,0,0.16) 100%)',
-                        opacity: power,
-                      }}
-                    />
+                      {/* Edge masks during roll to hide seams (subtle) */}
+                      {ROLL_ENABLED && Math.abs(rollY) > 0.5 && (
+                        <>
+                          <div
+                            style={{
+                              pointerEvents:'none',
+                              position:'absolute',
+                              left:0, right:0, top:0, height:12,
+                              background:'linear-gradient(to bottom, rgba(2,4,10,1), rgba(2,4,10,0))'
+                            }}
+                          />
+                          <div
+                            style={{
+                              pointerEvents:'none',
+                              position:'absolute',
+                              left:0, right:0, bottom:0, height:12,
+                              background:'linear-gradient(to top, rgba(2,4,10,1), rgba(2,4,10,0))'
+                            }}
+                          />
+                        </>
+                      )}
 
-                    {/* grain */}
-                    <div
-                      style={{
-                        pointerEvents:'none',
-                        position:'absolute', inset:0,
-                        mixBlendMode:'multiply',
-                        backgroundImage: `url("data:image/svg+xml;utf8,\
+                      {/* --- RGB subpixel mask --- */}
+                      <div
+                        style={{
+                          pointerEvents:'none',
+                          position:'absolute', inset:0,
+                          backgroundImage:
+                            'repeating-linear-gradient(to right, rgba(255,0,0,0.06) 0 1px, rgba(0,255,0,0.06) 1px 2px, rgba(0,0,255,0.06) 2px 3px)',
+                          backgroundSize: '3px 100%',
+                          mixBlendMode: 'screen',
+                          opacity: power * 0.4,
+                        }}
+                      />
+
+                      {/* scanlines */}
+                      <div
+                        className="crt-scan"
+                        style={{
+                          pointerEvents:'none',
+                          position:'absolute', inset:0,
+                          mixBlendMode:'multiply',
+                          backgroundImage:
+                            'repeating-linear-gradient(to bottom, rgba(0,0,0,0.35) 0px, rgba(0,0,0,0.35) 1px, rgba(0,0,0,0.0) 2px)',
+                          backgroundSize: '100% 2px',
+                          opacity: power,
+                        }}
+                      />
+
+                      {/* dot-pitch grid */}
+                      <div
+                        style={{
+                          pointerEvents:'none',
+                          position:'absolute', inset:0,
+                          mixBlendMode:'multiply',
+                          backgroundImage:
+                            'repeating-linear-gradient(to right, rgba(0,0,0,0.08) 0 1px, rgba(0,0,0,0) 1px 3px), repeating-linear-gradient(to bottom, rgba(0,0,0,0.08) 0 1px, rgba(0,0,0,0) 1px 3px)',
+                          backgroundSize: '3px 3px, 3px 3px',
+                          opacity: power * 0.9,
+                        }}
+                      />
+
+                      {/* vignette */}
+                      <div
+                        style={{
+                          pointerEvents:'none',
+                          position:'absolute', inset:0,
+                          background:
+                            'radial-gradient(60% 60% at 50% 50%, rgba(0,0,0,0) 60%, rgba(0,0,0,0.16) 100%)',
+                          opacity: power,
+                        }}
+                      />
+
+                      {/* grain */}
+                      <div
+                        style={{
+                          pointerEvents:'none',
+                          position:'absolute', inset:0,
+                          mixBlendMode:'multiply',
+                          backgroundImage: `url("data:image/svg+xml;utf8,\
 <svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'>\
 <filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter>\
-<rect width="100%" height="100%" filter="url(%23n)" opacity="0.05"/></svg>")`,
-                        backgroundSize: '128px 128px',
-                        animation: 'grainMove 2.4s steps(30) infinite',
-                        opacity: power,
-                      }}
-                    />
+<rect width='100%' height='100%' filter='url(%23n)' opacity='0.05'/></svg>")`,
+                          backgroundSize: '128px 128px',
+                          animation: 'grainMove 2.4s steps(30) infinite',
+                          opacity: power,
+                        }}
+                      />
 
-                    {/* dual flicker */}
-                    <div
-                      className="crt-flicker-bright"
-                      style={{
-                        pointerEvents:'none',
-                        position:'absolute', inset:0,
-                        background: 'rgba(255,255,255,0.04)',
-                        mixBlendMode:'screen',
-                        animation: 'crtFlickerBright 1s steps(60) infinite',
-                        opacity: power,
-                      }}
-                    />
-                    <div
-                      className="crt-flicker-dark"
-                      style={{
-                        pointerEvents:'none',
-                        position:'absolute', inset:0,
-                        background: 'rgba(0,0,0,0.06)',
-                        mixBlendMode:'multiply',
-                        animation: 'crtFlickerDark 1s steps(60) infinite',
-                        opacity: power,
-                      }}
-                    />
+                      {/* dual flicker */}
+                      <div
+                        className="crt-flicker-bright"
+                        style={{
+                          pointerEvents:'none',
+                          position:'absolute', inset:0,
+                          background: 'rgba(255,255,255,0.04)',
+                          mixBlendMode:'screen',
+                          animation: 'crtFlickerBright 1s steps(60) infinite',
+                          opacity: power,
+                        }}
+                      />
+                      <div
+                        className="crt-flicker-dark"
+                        style={{
+                          pointerEvents:'none',
+                          position:'absolute', inset:0,
+                          background: 'rgba(0,0,0,0.06)',
+                          mixBlendMode:'multiply',
+                          animation: 'crtFlickerDark 1s steps(60) infinite',
+                          opacity: power,
+                        }}
+                      />
 
-                    {/* chroma fringe */}
-                    <div
-                      style={{
-                        pointerEvents:'none',
-                        position:'absolute', inset:0,
-                        mixBlendMode:'screen',
-                        background: `
-                          radial-gradient(80% 80% at 50% 50%, rgba(255,0,0,0.00) 55%, rgba(255,0,0,0.05) 100%),
-                          radial-gradient(80% 80% at 50% 50%, rgba(0,255,255,0.00) 55%, rgba(0,255,255,0.04) 100%)
-                        `,
-                        opacity: power,
-                      }}
-                    />
+                      {/* NEW: frame pacing stutter (subtle brightness hiccups) */}
+                      <div
+                        style={{
+                          pointerEvents:'none',
+                          position:'absolute', inset:0,
+                          background:'rgba(255,255,255,0.035)',
+                          mixBlendMode:'screen',
+                          opacity: power,
+                          animation: 'crtStutter 2.4s steps(60) infinite',
+                        }}
+                      />
 
-                    {/* --- random green horizontal glitch line --- */}
-                    {greenLineOn && (
-                      <div style={{ pointerEvents:'none', position:'absolute', inset:0, zIndex: 6 }}>
+                      {/* chroma fringe */}
+                      <div
+                        style={{
+                          pointerEvents:'none',
+                          position:'absolute', inset:0,
+                          mixBlendMode:'screen',
+                          background: `
+                            radial-gradient(80% 80% at 50% 50%, rgba(255,0,0,0.00) 55%, rgba(255,0,0,0.05) 100%),
+                            radial-gradient(80% 80% at 50% 50%, rgba(0,255,255,0.00) 55%, rgba(0,255,255,0.04) 100%)
+                          `,
+                          opacity: power,
+                        }}
+                      />
+
+                      {/* --- random green horizontal glitch line --- */}
+                      {greenLineOn && (
+                        <div style={{ pointerEvents:'none', position:'absolute', inset:0, zIndex: 6 }}>
+                          <div
+                            style={{
+                              position:'absolute',
+                              left:0, right:0,
+                              top: `calc(${(greenLineY * 100).toFixed(2)}% - 1px)`,
+                              height:'2px',
+                              background: 'linear-gradient(to bottom, rgba(0,255,0,0) 0%, rgba(0,255,140,0.95) 50%, rgba(0,255,0,0) 100%)',
+                              filter: 'blur(0.3px)',
+                              opacity: Math.min(1, power + 0.25),
+                              mixBlendMode:'screen',
+                            }}
+                          />
+                          <div
+                            style={{
+                              position:'absolute',
+                              left:0, right:0,
+                              top: `calc(${(greenLineY * 100).toFixed(2)}% - 6px)`,
+                              height:'12px',
+                              background: 'linear-gradient(to bottom, rgba(0,255,100,0) 0%, rgba(0,255,100,0.28) 50%, rgba(0,255,100,0) 100%)',
+                              filter: 'blur(1px)',
+                              opacity: Math.min(1, power + 0.15),
+                              mixBlendMode:'screen',
+                            }}
+                          />
+                        </div>
+                      )}
+
+                      {/* --- random green vertical tear  --- */}
+                      {greenTearOn && (
+                        <div style={{ pointerEvents:'none', position:'absolute', inset:0, zIndex: 6 }}>
+                          <div
+                            style={{
+                              position:'absolute',
+                              top:0, bottom:0,
+                              left: `calc(${(greenTearX * 100).toFixed(2)}% - ${greenTearW/2}px)`,
+                              width: `${greenTearW}px`,
+                              background: 'linear-gradient(to right, rgba(0,255,120,0), rgba(0,255,120,0.95), rgba(0,255,120,0))',
+                              filter: 'blur(0.4px)',
+                              opacity: Math.min(1, power + 0.25),
+                              mixBlendMode:'screen',
+                            }}
+                          />
+                          <div
+                            style={{
+                              position:'absolute',
+                              top:0, bottom:0,
+                              left: `calc(${(greenTearX * 100).toFixed(2)}% - 6px)`,
+                              width:'12px',
+                              background: 'linear-gradient(to right, rgba(0,255,120,0), rgba(0,255,120,0.26), rgba(0,255,120,0))',
+                              filter: 'blur(1px)',
+                              opacity: Math.min(1, power + 0.15),
+                              mixBlendMode:'screen',
+                            }}
+                          />
+                        </div>
+                      )}
+
+                      {/* NEW: RGB misalignment overlays during degauss */}
+                      {degauss && (
+                        <>
+                          <div
+                            style={{
+                              pointerEvents:'none',
+                              position:'absolute', inset:0,
+                              mixBlendMode:'screen',
+                              background:'rgba(255,0,0,0.08)',
+                              filter:'blur(0.4px)',
+                              animation:'crtRGBShiver 900ms ease-out',
+                            }}
+                          />
+                          <div
+                            style={{
+                              pointerEvents:'none',
+                              position:'absolute', inset:0,
+                              mixBlendMode:'screen',
+                              background:'rgba(0,255,255,0.06)',
+                              filter:'blur(0.4px)',
+                              animation:'crtRGBShiver 900ms ease-out',
+                            }}
+                          />
+                        </>
+                      )}
+
+                      {/* NEW: ULTRA-RARE colored static burst */}
+                      {staticBurst && (
+                        <div style={{ pointerEvents:'none', position:'absolute', inset:0, zIndex:7 }}>
+                          {/* high-frequency noise layer, tinted via hue-rotate */}
+                          <div
+                            style={{
+                              position:'absolute', inset:0,
+                              mixBlendMode:'screen',
+                              backgroundImage: `url("data:image/svg+xml;utf8,\
+<svg xmlns='http://www.w3.org/2000/svg' width='128' height='128'>\
+<filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='1' stitchTiles='stitch'/></filter>\
+<rect width='100%' height='100%' filter='url(%23n)'/></svg>")`,
+                              backgroundSize:'96px 96px',
+                              animation: 'crtStaticShake 120ms steps(2) infinite, crtStaticScroll 140ms steps(2) infinite',
+                              filter: `hue-rotate(${staticHue}deg) saturate(1.8) contrast(1.2)`,
+                              opacity: Math.min(1, power + 0.15),
+                            }}
+                          />
+                          {/* fine color stripes to sell analog interference */}
+                          <div
+                            style={{
+                              position:'absolute', inset:0,
+                              backgroundImage:
+                                'repeating-linear-gradient(to bottom, rgba(255,255,255,0.06) 0 1px, rgba(0,0,0,0) 1px 2px)',
+                              mixBlendMode:'overlay',
+                              opacity: Math.min(0.25, power * 0.3),
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ===== White streak of light when shutting off ===== */}
+                    {streak > 0.001 && (
+                      <div
+                        style={{
+                          pointerEvents: 'none',
+                          position: 'absolute',
+                          inset: 0,
+                          opacity: 0.9 * streak,
+                          mixBlendMode: 'screen',
+                        }}
+                      >
                         <div
                           style={{
-                            position:'absolute',
-                            left:0, right:0,
-                            top: `calc(${(greenLineY * 100).toFixed(2)}% - 1px)`,
-                            height:'2px',
-                            background: 'linear-gradient(to bottom, rgba(0,255,0,0) 0%, rgba(0,255,140,0.95) 50%, rgba(0,255,0,0) 100%)',
-                            filter: 'blur(0.3px)',
-                            opacity: Math.min(1, power + 0.25),
-                            mixBlendMode:'screen',
-                          }}
-                        />
-                        <div
-                          style={{
-                            position:'absolute',
-                            left:0, right:0,
-                            top: `calc(${(greenLineY * 100).toFixed(2)}% - 6px)`,
-                            height:'12px',
-                            background: 'linear-gradient(to bottom, rgba(0,255,100,0) 0%, rgba(0,255,100,0.28) 50%, rgba(0,255,100,0) 100%)',
-                            filter: 'blur(1px)',
-                            opacity: Math.min(1, power + 0.15),
-                            mixBlendMode:'screen',
-                          }}
-                        />
-                      </div>
-                    )}
-
-                    {/* --- random green vertical tear  --- */}
-                    {greenTearOn && (
-                      <div style={{ pointerEvents:'none', position:'absolute', inset:0, zIndex: 6 }}>
-                        <div
-                          style={{
-                            position:'absolute',
-                            top:0, bottom:0,
-                            left: `calc(${(greenTearX * 100).toFixed(2)}% - ${greenTearW/2}px)`,
-                            width: `${greenTearW}px`,
-                            background: 'linear-gradient(to right, rgba(0,255,120,0), rgba(0,255,120,0.95), rgba(0,255,120,0))',
-                            filter: 'blur(0.4px)',
-                            opacity: Math.min(1, power + 0.25),
-                            mixBlendMode:'screen',
-                          }}
-                        />
-                        <div
-                          style={{
-                            position:'absolute',
-                            top:0, bottom:0,
-                            left: `calc(${(greenTearX * 100).toFixed(2)}% - 6px)`,
-                            width:'12px',
-                            background: 'linear-gradient(to right, rgba(0,255,120,0), rgba(0,255,120,0.26), rgba(0,255,120,0))',
-                            filter: 'blur(1px)',
-                            opacity: Math.min(1, power + 0.15),
-                            mixBlendMode:'screen',
+                            position: 'absolute',
+                            left: 0,
+                            right: 0,
+                            top: `calc(50% - ${Math.max(2, (H) * (0.015 + 0.06)) / 2}px)`,
+                            height: `${Math.max(2, (H) * (0.015 + 0.06))}px`,
+                            background:
+                              'linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,0.92) 50%, rgba(255,255,255,0) 100%)',
                           }}
                         />
                       </div>
                     )}
                   </div>
-
-                  {/* ===== White streak of light when shutting off ===== */}
-                  {streak > 0.001 && (
-                    <div
-                      style={{
-                        pointerEvents: 'none',
-                        position: 'absolute',
-                        inset: 0,
-                        opacity: 0.9 * streak,
-                        mixBlendMode: 'screen',
-                      }}
-                    >
-                      <div
-                        style={{
-                          position: 'absolute',
-                          left: 0,
-                          right: 0,
-                          top: `calc(50% - ${Math.max(2, (cssSize.h * 0.90) * (0.015 + 0.06 * Math.max(0, 1))) / 2}px)`,
-                          height: `${Math.max(2, (cssSize.h * 0.90) * (0.015 + 0.06))}px`,
-                          background:
-                            'linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,0.92) 50%, rgba(255,255,255,0) 100%)',
-                        }}
-                      />
-                    </div>
-                  )}
-                </div>
+                </>
               )
             })()}
           </Html>
@@ -796,253 +980,197 @@ function PCInteractive({
 }
 
 /* ================= Photo Frame ================= */
-function PhotoFrameGLB({ position, rotation = [0,0,0], scale = 1, onClick }) {
-  const { scene } = useGLTF('/models/photo_frame.glb')
-  useEffect(() => { enableShadows(scene, { cast: true, receive: true }) }, [scene])
-  return (
-    <group position={position} rotation={rotation} scale={scale} onClick={onClick}>
-      <primitive object={scene} />
-    </group>
-  )
-}
+const PhotoFrameGLB = (props) => (
+  <GLBModel path="/models/photo_frame.glb" cast receive {...props} />
+)
 function PhotoFrameFallback({ position, rotation = [0,0,0], scale = 1, onClick }) {
+  // composite: frame + inner plane
   return (
     <group position={position} rotation={rotation} scale={scale} onClick={onClick}>
-      <mesh castShadow>
-        <boxGeometry args={[0.18, 0.12, 0.015]} />
-        <meshStandardMaterial color="#111" />
-      </mesh>
-      <mesh position={[0, 0, -0.0075]} receiveShadow>
-        <planeGeometry args={[0.16, 0.10]} />
-        <meshStandardMaterial color="#666" />
-      </mesh>
+      <FallbackMesh type="box" args={[0.18, 0.12, 0.015]} color="#111" />
+      <FallbackMesh type="plane" args={[0.16, 0.10]} color="#666" position={[0, 0, -0.0075]} receiveShadow />
     </group>
   )
 }
 
 /* ================= Other models ================= */
-function GamingChairGLB({ onClick, position, rotation = [0, 0, 0], scale = 1 }) {
-  const { scene } = useGLTF('/models/gaming_chair.glb')
-  useEffect(() => { enableShadows(scene, { cast: true, receive: true }) }, [scene])
-  return (
-    <group onClick={onClick} position={position} rotation={rotation} scale={scale}>
-      <primitive object={scene} />
-    </group>
-  )
-}
+const GamingChairGLB = (props) => (
+  <GLBModel path="/models/gaming_chair.glb" cast receive {...props} />
+)
 function GamingChairFallback({ onClick, position, rotation = [0, 0, 0], scale = 1 }) {
   return (
-    <mesh onClick={onClick} position={position} rotation={rotation} scale={scale} castShadow>
-      <boxGeometry args={[0.4, 1.0, 0.4]} />
-      <meshStandardMaterial color="#444" />
-    </mesh>
+    <FallbackMesh
+      type="box"
+      args={[0.4, 1.0, 0.4]}
+      color="#444"
+      onClick={onClick}
+      position={position}
+      rotation={rotation}
+      scale={scale}
+    />
   )
 }
 
-function SnowboardGLB({ onClick, position, scale = 1 }) {
-  const { scene } = useGLTF('/models/snowboard.glb')
-  useEffect(() => { enableShadows(scene, { cast: true, receive: true }) }, [scene])
-  return (
-    <group onClick={onClick} position={position} scale={scale}>
-      <primitive object={scene} />
-    </group>
-  )
-}
+const SnowboardGLB = (props) => (
+  <GLBModel path="/models/snowboard.glb" cast receive {...props} />
+)
 function SnowboardFallback({ onClick, position, scale = 1 }) {
   return (
-    <mesh onClick={onClick} position={position} rotation={[0, 0, Math.PI / 2]} scale={scale} castShadow>
-      <boxGeometry args={[0.1, 1.4, 0.05]} />
-      <meshStandardMaterial color="#7dd3fc" />
-    </mesh>
+    <FallbackMesh
+      type="box"
+      args={[0.1, 1.4, 0.05]}
+      color="#7dd3fc"
+      onClick={onClick}
+      position={position}
+      rotation={[0, 0, Math.PI / 2]}
+      scale={scale}
+    />
   )
 }
 
-function SoccerBallGLB({ onClick, position, scale = 1 }) {
-  const { scene } = useGLTF('/models/soccer_ball.glb')
-  useEffect(() => { enableShadows(scene, { cast: true, receive: false }) }, [scene])
-  return (
-    <group onClick={onClick} position={position} scale={scale}>
-      <primitive object={scene} />
-    </group>
-  )
-}
+const SoccerBallGLB = (props) => (
+  <GLBModel path="/models/soccer_ball.glb" cast receive={false} {...props} />
+)
 function SoccerBallFallback({ onClick, position, scale = 1 }) {
   return (
-    <mesh onClick={onClick} position={position} castShadow scale={scale}>
-      <sphereGeometry args={[0.12, 24, 24]} />
-      <meshStandardMaterial color="#f5f5f5" />
-    </mesh>
+    <FallbackMesh
+      type="sphere"
+      args={[0.12, 24, 24]}
+      color="#f5f5f5"
+      onClick={onClick}
+      position={position}
+      scale={scale}
+    />
   )
 }
 
-function PalmTreeGLB({ onClick, position, scale = 1 }) {
-  const { scene } = useGLTF('/models/palm_tree.glb')
-  useEffect(() => { enableShadows(scene, { cast: true, receive: true }) }, [scene])
-  return (
-    <group onClick={onClick} position={position} scale={scale}>
-      <primitive object={scene} />
-    </group>
-  )
-}
+const PalmTreeGLB = (props) => (
+  <GLBModel path="/models/palm_tree.glb" cast receive {...props} />
+)
 function PalmTreeFallback({ onClick, position, scale = 1 }) {
+  // composite: trunk + leaves
   return (
     <group onClick={onClick} position={position} scale={scale}>
-      <mesh position={[0, 0.1, 0]} castShadow>
-        <cylinderGeometry args={[0.02, 0.05, 0.6, 12]} />
-        <meshStandardMaterial color="#8b5a2b" />
-      </mesh>
-      <mesh position={[0, 0.45, 0]} receiveShadow>
-        <coneGeometry args={[0.35, 0.6, 6]} />
-        <meshStandardMaterial color="#22c55e" />
-      </mesh>
+      <FallbackMesh type="cylinder" args={[0.02, 0.05, 0.6, 12]} color="#8b5a2b" position={[0, 0.1, 0]} />
+      <FallbackMesh type="cone" args={[0.35, 0.6, 6]} color="#22c55e" position={[0, 0.45, 0]} receiveShadow />
     </group>
   )
 }
 
 /* ==================== NEW: Desk-top props ==================== */
-/* Books */
-function BooksGLB({ position, rotation = [0,0,0], scale = 1, onClick }) {
-  const { scene } = useGLTF('/models/books.glb')
-  useEffect(() => { enableShadows(scene, { cast: true, receive: true }) }, [scene])
-  return (
-    <group position={position} rotation={rotation} scale={scale} onClick={onClick} raycast={() => null}>
-      <primitive object={scene} />
-    </group>
-  )
-}
+const BooksGLB = (props) => (
+  <GLBModel path="/models/books.glb" cast receive {...props} />
+)
 function BooksFallback({ position, rotation = [0,0,0], scale = 1 }) {
   return (
-    <group position={position} rotation={rotation} scale={scale} raycast={() => null}>
-      <mesh castShadow>
-        <boxGeometry args={[0.18, 0.06, 0.24]} />
-        <meshStandardMaterial color="#8b5cf6" />
-      </mesh>
-    </group>
+    <FallbackMesh
+      type="box"
+      args={[0.18, 0.06, 0.24]}
+      color="#8b5cf6"
+      position={position}
+      rotation={rotation}
+      scale={scale}
+      raycast={() => null} // preserve non-interactive fallback
+    />
   )
 }
 
-/* PSP (on top of books) */
-function PSPGLB({ position, rotation = [0,0,0], scale = 1, onClick }) {
-  const { scene } = useGLTF('/models/psp.glb')
-  useEffect(() => { enableShadows(scene, { cast: true, receive: true }) }, [scene])
-  return (
-    <group position={position} rotation={rotation} scale={scale} onClick={onClick} raycast={() => null}>
-      <primitive object={scene} />
-    </group>
-  )
-}
+const PSPGLB = (props) => (
+  <GLBModel path="/models/psp.glb" cast receive {...props} />
+)
 function PSPFallback({ position, rotation = [0,0,0], scale = 1 }) {
   return (
-    <mesh position={position} rotation={rotation} scale={scale} castShadow raycast={() => null}>
-      <boxGeometry args={[0.16, 0.02, 0.07]} />
-      <meshStandardMaterial color="#111" />
-    </mesh>
+    <FallbackMesh
+      type="box"
+      args={[0.16, 0.02, 0.07]}
+      color="#111"
+      position={position}
+      rotation={rotation}
+      scale={scale}
+      raycast={() => null}
+    />
   )
 }
 
-/* Rubik's Cube */
-function RubixCubeGLB({ position, rotation = [0,0,0], scale = 1, onClick }) {
-  const { scene } = useGLTF('/models/RubixCube.glb')
-  useEffect(() => { enableShadows(scene, { cast: true, receive: true }) }, [scene])
-  return (
-    <group position={position} rotation={rotation} scale={scale} onClick={onClick} raycast={() => null}>
-      <primitive object={scene} />
-    </group>
-  )
-}
+const RubixCubeGLB = (props) => (
+  <GLBModel path="/models/RubixCube.glb" cast receive {...props} />
+)
 function RubixCubeFallback({ position, rotation = [0,0,0], scale = 1 }) {
   return (
-    <mesh position={position} rotation={rotation} scale={scale} castShadow raycast={() => null}>
-      <boxGeometry args={[0.06, 0.06, 0.06]} />
-      <meshStandardMaterial color="#22d3ee" />
-    </mesh>
+    <FallbackMesh
+      type="box"
+      args={[0.06, 0.06, 0.06]}
+      color="#22d3ee"
+      position={position}
+      rotation={rotation}
+      scale={scale}
+      raycast={() => null}
+    />
   )
 }
 
-/* Pencil holder */
-function PencilsGLB({ position, rotation = [0,0,0], scale = 1, onClick }) {
-  const { scene } = useGLTF('/models/pencils.glb')
-  useEffect(() => { enableShadows(scene, { cast: true, receive: true }) }, [scene])
-  return (
-    <group position={position} rotation={rotation} scale={scale} onClick={onClick} raycast={() => null}>
-      <primitive object={scene} />
-    </group>
-  )
-}
+const PencilsGLB = (props) => (
+  <GLBModel path="/models/pencils.glb" cast receive {...props} />
+)
 function PencilsFallback({ position, rotation = [0,0,0], scale = 1 }) {
   return (
-    <group position={position} rotation={rotation} scale={scale} raycast={() => null}>
-      <mesh castShadow>
-        <cylinderGeometry args={[0.02, 0.02, 0.08, 12]} />
-        <meshStandardMaterial color="#9ca3af" />
-      </mesh>
-    </group>
+    <FallbackMesh
+      type="cylinder"
+      args={[0.02, 0.02, 0.08, 12]}
+      color="#9ca3af"
+      position={position}
+      rotation={rotation}
+      scale={scale}
+      raycast={() => null}
+    />
   )
 }
 
 /* ==================== NEW: Barça corner (grass, net, wall logo) ==================== */
-function GrassGLB({ position, rotation=[0,0,0], scale=1 }) {
-  const { scene } = useGLTF('/models/grass.glb')
-  useEffect(() => { enableShadows(scene, { cast: false, receive: true }) }, [scene])
-  return (
-    <group position={position} rotation={rotation} scale={scale} raycast={() => null}>
-      <primitive object={scene} />
-    </group>
-  )
-}
+const GrassGLB = (props) => (
+  <GLBModel path="/models/grass.glb" cast={false} receive {...props} />
+)
 function GrassFallback({ position, rotation=[0,0,0], scale=1 }) {
   return (
-    <mesh position={position} rotation={rotation} scale={scale} receiveShadow>
-      <boxGeometry args={[1.6, 0.02, 1.0]} />
-      <meshStandardMaterial color="#166534" />
-    </mesh>
+    <FallbackMesh
+      type="box"
+      args={[1.6, 0.02, 1.0]}
+      color="#166534"
+      position={position}
+      rotation={rotation}
+      scale={scale}
+      receiveShadow
+    />
   )
 }
 
-function GoalNetGLB({ position, rotation=[0,0,0], scale=1 }) {
-  const { scene } = useGLTF('/models/NetFinal.glb')
-  useEffect(() => { enableShadows(scene, { cast: true, receive: true }) }, [scene])
-  return (
-    <group position={position} rotation={rotation} scale={scale}>
-      <primitive object={scene} />
-    </group>
-  )
-}
+const GoalNetGLB = (props) => (
+  <GLBModel path="/models/NetFinal.glb" cast receive {...props} />
+)
 function GoalNetFallback({ position, rotation=[0,0,0], scale=1 }) {
+  // composite: posts
   return (
     <group position={position} rotation={rotation} scale={scale}>
-      {/* simple posts */}
-      <mesh castShadow>
-        <boxGeometry args={[1.6, 0.05, 0.05]} />
-        <meshStandardMaterial color="#ddd" />
-      </mesh>
-      <mesh position={[-0.8, -0.4, -0.6]} castShadow>
-        <boxGeometry args={[0.05, 0.8, 1.2]} />
-        <meshStandardMaterial color="#ddd" />
-      </mesh>
-      <mesh position={[0.8, -0.4, -0.6]} castShadow>
-        <boxGeometry args={[0.05, 0.8, 1.2]} />
-        <meshStandardMaterial color="#ddd" />
-      </mesh>
+      <FallbackMesh type="box" args={[1.6, 0.05, 0.05]} color="#ddd" />
+      <FallbackMesh type="box" args={[0.05, 0.8, 1.2]} color="#ddd" position={[-0.8, -0.4, -0.6]} />
+      <FallbackMesh type="box" args={[0.05, 0.8, 1.2]} color="#ddd" position={[0.8, -0.4, -0.6]} />
     </group>
   )
 }
 
-function BarcaLogoGLB({ position, rotation=[0,0,0], scale=1 }) {
-  const { scene } = useGLTF('/models/logos_barcelona.glb')
-  useEffect(() => { enableShadows(scene, { cast: true, receive: false }) }, [scene])
-  return (
-    <group position={position} rotation={rotation} scale={scale}>
-      <primitive object={scene} />
-    </group>
-  )
-}
+const BarcaLogoGLB = (props) => (
+  <GLBModel path="/models/logos_barcelona.glb" cast receive={false} {...props} />
+)
 function BarcaLogoFallback({ position, rotation=[0,0,0], scale=1 }) {
   return (
-    <mesh position={position} rotation={rotation} scale={scale} castShadow>
-      <boxGeometry args={[0.4, 0.5, 0.02]} />
-      <meshStandardMaterial color="#A50044" />
-    </mesh>
+    <FallbackMesh
+      type="box"
+      args={[0.4, 0.5, 0.02]}
+      color="#A50044"
+      position={position}
+      rotation={rotation}
+      scale={scale}
+    />
   )
 }
 
@@ -1058,32 +1186,30 @@ export default function Room({
   pcActive = false,
 }) {
   useEffect(() => {
-    useGLTF.preload('/models/desk.glb')
-    useGLTF.preload('/models/PC.glb')
-    useGLTF.preload('/models/photo_frame.glb')
-    useGLTF.preload('/models/gaming_chair.glb')
-    useGLTF.preload('/models/snowboard.glb')
-    useGLTF.preload('/models/soccer_ball.glb')
-    useGLTF.preload('/models/palm_tree.glb')
-
-    /* NEW: preload desk-top props */
-    useGLTF.preload('/models/books.glb')
-    useGLTF.preload('/models/psp.glb')
-    useGLTF.preload('/models/RubixCube.glb')
-    useGLTF.preload('/models/pencils.glb')
-
-    /* NEW: preload Barça corner */
-    useGLTF.preload('/models/grass.glb')
-    useGLTF.preload('/models/NetFinal.glb')
-    useGLTF.preload('/models/logos_barcelona.glb')
+    const PRELOAD = [
+      '/models/desk.glb',
+      '/models/PC.glb',
+      '/models/photo_frame.glb',
+      '/models/gaming_chair.glb',
+      '/models/snowboard.glb',
+      '/models/soccer_ball.glb',
+      '/models/palm_tree.glb',
+      '/models/books.glb',
+      '/models/psp.glb',
+      '/models/RubixCube.glb',
+      '/models/pencils.glb',
+      '/models/grass.glb',
+      '/models/NetFinal.glb',
+      '/models/logos_barcelona.glb',
+    ]
+    PRELOAD.forEach((p) => useGLTF.preload(p))
   }, [])
 
-  
   const GOAL_POS = useMemo(() => [-1.2, 0, -1.2], [])
   const GOAL_SCALE = 0.6
-  const BALL_POS = useMemo(() => [-.76, 0.25, -.8], []) // inside the net, a bit forward
+  const BALL_POS = useMemo(() => [-.76, 0.25, -.8], [])
   const LOGO_POS = useMemo(() => [-1.13, 0.02, -1.4], [])
-  const LOGO_ROT = useMemo(() => [0, Math.PI, 0], []) // face into the room
+  const LOGO_ROT = useMemo(() => [0, Math.PI, 0], [])
 
   return (
     <group>
@@ -1172,47 +1298,38 @@ export default function Room({
           <PalmTreeFallback onClick={onBeachClick} position={[0.9, 0, -1.6]} scale={0.2} />
         }
       >
-        <PalmTreeGLB onClick={onBeachClick}  position={[0.9, 0, 0]} rotation={[0, Math.PI *100, 0]} scale={0.1} />
+        <PalmTreeGLB onClick={onBeachClick}  position={[0.9, 0, 0]} rotation={[0, Math.PI * 100, 0]} scale={0.1} />
       </Suspense>
 
       {/* ========= Desk-top props  ========= */}
-      {/* Books  */}
       <Suspense fallback={<BooksFallback position={[0.4, 0.585, 0.2]} scale={0.4} />}>
         <BooksGLB position={[0.4, 0.58, 0.3]} scale={0.4} />
       </Suspense>
 
-      {/* PSP  */}
       <Suspense fallback={<PSPFallback position={[0.4, 0.62, 0.2]} rotation={[0, Math.PI * 0.12, 0]} scale={1} />}>
         <PSPGLB position={[0.4, 0.619, 0.3]} rotation={[0, Math.PI * 0.12, 0]} scale={1} />
       </Suspense>
 
-      {/* Rubiks cube  */}
       <Suspense fallback={<RubixCubeFallback position={[-0.3, 0.585, 0.17]} scale={0.35} />}>
         <RubixCubeGLB position={[-0.5, 0.578, 0.2]} scale={0.35} />
       </Suspense>
 
-      {/* Pencil */}
       <Suspense fallback={<PencilsFallback position={[-0.3, 0.61, 0.02]} rotation={[0, Math.PI * 0.25, 0]} scale={0.02} />}>
         <PencilsGLB position={[-0.3, 0.605, 0.2]} rotation={[0, Math.PI * 0.25, 0]} scale={0.02} />
       </Suspense>
-      {/* ========= /Desk props ========= */}
 
       {/* ========= NEW: Barça corner ========= */}
-      {/* Grass  */}
-      <Suspense fallback={<GrassFallback position={GOAL_POS} rotation={[0,0,0]} scale={1.2} />}>
+      <Suspense fallback={<GrassFallback position={[-1.15, 0, -1.3]} rotation={[0,0,0]} scale={.7} />}>
         <GrassGLB position={[-1.15, 0, -1.3]} rotation={[0,0,0]} scale={.7} />
       </Suspense>
 
-      {/* Goal net */}
-      <Suspense fallback={<GoalNetFallback position={GOAL_POS} rotation={[0,Math.PI,0]} scale={GOAL_SCALE} />}>
-        <GoalNetGLB position={GOAL_POS} rotation={[0,Math.PI,0]} scale={.4} />
+      <Suspense fallback={<GoalNetFallback position={[-1.2, 0, -1.2]} rotation={[0,Math.PI,0]} scale={0.6} />}>
+        <GoalNetGLB position={[-1.2, 0, -1.2]} rotation={[0,Math.PI,0]} scale={0.6} />
       </Suspense>
 
-      {/* Barça wall */}
-      <Suspense fallback={<BarcaLogoFallback position={LOGO_POS} rotation={LOGO_ROT} scale={0.5} />}>
-        <BarcaLogoGLB position={LOGO_POS} rotation={LOGO_ROT} scale={0.4} />
+      <Suspense fallback={<BarcaLogoFallback position={[-1.13, 0.02, -1.4]} rotation={[0, Math.PI, 0]} scale={0.5} />}>
+        <BarcaLogoGLB position={[-1.13, 0.02, -1.4]} rotation={[0, Math.PI, 0]} scale={0.4} />
       </Suspense>
-      {/* ========= /NEW ========= */}
     </group>
   )
 }
