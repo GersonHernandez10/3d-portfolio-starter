@@ -1164,7 +1164,7 @@ export default function Room({
           />
         }
       >
-        <SoccerBallGLB onClick={onSoccerClick} position={BALL_POS} scale={0.2} />
+        <SoccerBallGLB onClick={onSoccerClick} position={BALL_POS} scale={0.16} />
       </Suspense>
 
       <Suspense
@@ -1200,17 +1200,17 @@ export default function Room({
       {/* ========= NEW: Barça corner ========= */}
       {/* Grass  */}
       <Suspense fallback={<GrassFallback position={GOAL_POS} rotation={[0,0,0]} scale={1.2} />}>
-        <GrassGLB position={[-1.13, 0, -1.3]} rotation={[0,0,0]} scale={.9} />
+        <GrassGLB position={[-1.15, 0, -1.3]} rotation={[0,0,0]} scale={.7} />
       </Suspense>
 
       {/* Goal net */}
       <Suspense fallback={<GoalNetFallback position={GOAL_POS} rotation={[0,Math.PI,0]} scale={GOAL_SCALE} />}>
-        <GoalNetGLB position={GOAL_POS} rotation={[0,Math.PI,0]} scale={GOAL_SCALE} />
+        <GoalNetGLB position={GOAL_POS} rotation={[0,Math.PI,0]} scale={.4} />
       </Suspense>
 
       {/* Barça wall */}
       <Suspense fallback={<BarcaLogoFallback position={LOGO_POS} rotation={LOGO_ROT} scale={0.5} />}>
-        <BarcaLogoGLB position={LOGO_POS} rotation={LOGO_ROT} scale={0.5} />
+        <BarcaLogoGLB position={LOGO_POS} rotation={LOGO_ROT} scale={0.4} />
       </Suspense>
       {/* ========= /NEW ========= */}
     </group>
