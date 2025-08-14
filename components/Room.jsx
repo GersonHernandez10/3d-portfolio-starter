@@ -1014,7 +1014,7 @@ export default function Room({
 
       {/* Desk + PC + Frame */}
       <Suspense fallback={null}>
-        <DeskGLB position={[0, 0, 0.07]} scale={0.7} onClick={onDeskAreaClick} />
+        <DeskGLB position={[-0.02, 0.053, 0.065]} scale={0.225} onClick={onDeskAreaClick} />
 
         <PCInteractive
           position={[0, 0.58, 0.000000001]}
@@ -1040,7 +1040,7 @@ export default function Room({
           <PhotoFrameGLB
             position={[-0.4, 0.57, 0.17]}
             rotation={[0, Math.PI * 0.08, 0]}
-            scale={0.06}
+            scale={0.09}
             onClick={onFrameClick}
           />
         </Suspense>
@@ -1095,28 +1095,6 @@ export default function Room({
       >
         <PalmTreeGLB onClick={onBeachClick} position={[0.9, 0, -1.6]} scale={0.2} />
       </Suspense>
-
-      {/* ========= Desk-top props  ========= */}
-      {/* Books  */}
-      <Suspense fallback={<BooksFallback position={[0.4, 0.585, 0.2]} scale={0.4} />}>
-        <BooksGLB position={[0.4, 0.585, 0.2]} scale={0.4} />
-      </Suspense>
-
-      {/* PSP  */}
-      <Suspense fallback={<PSPFallback position={[0.4, 0.62, 0.2]} rotation={[0, Math.PI * 0.12, 0]} scale={1} />}>
-        <PSPGLB position={[0.4, 0.62, 0.2]} rotation={[0, Math.PI * 0.12, 0]} scale={1} />
-      </Suspense>
-
-      {/* Rubiks cube  */}
-      <Suspense fallback={<RubixCubeFallback position={[-0.3, 0.585, 0.17]} scale={0.35} />}>
-        <RubixCubeGLB position={[-0.3, 0.585, 0.17]} scale={0.35} />
-      </Suspense>
-
-      {/* Pencil */}
-      <Suspense fallback={<PencilsFallback position={[-0.3, 0.61, 0.02]} rotation={[0, Math.PI * 0.25, 0]} scale={0.02} />}>
-        <PencilsGLB position={[-0.3, 0.61, 0.02]} rotation={[0, Math.PI * 0.25, 0]} scale={0.02} />
-      </Suspense>
-      {/* ========= /NEW ========= */}
     </group>
   )
 }
