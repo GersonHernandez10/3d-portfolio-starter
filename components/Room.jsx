@@ -7,6 +7,7 @@ import React, {
   useMemo,
   useRef,
   useState,
+  memo,
 } from 'react'
 import { Html, useGLTF } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
@@ -70,7 +71,7 @@ function ShadowCatcher({ size = 10, y = -0.001, opacity = 0.42 }) {
   )
 }
 
-/* ===== Generic GLB wrapper  ===== */
+/* ===== Generic GLB wrapper to remove repetition ===== */
 function GLBModel({
   path,
   position,
@@ -91,13 +92,494 @@ function GLBModel({
 }
 
 /* ================= Desk ================= */
-const DeskGLB = (props) => (
-  <GLBModel path="/models/desk.glb" cast receive {...props} />
-)
+const DeskGLB = (props) => <GLBModel path="/models/desk.glb" cast receive {...props} />
+
+/* ========== Tiny helpers for Terminal ========== */
+const URL = (href) => ({ __url: href })
+const isUrlFile = (node) => node && typeof node === 'object' && !!node.__url
+const isFile = (node) => typeof node === 'string' || isUrlFile(node)
+const isDir = (node) => node && typeof node === 'object' && !node.__url
+
+function normalizePath(base, input) {
+  if (!input || input.trim() === '') return base
+  let parts
+  if (input.startsWith('/')) parts = input.split('/')
+  else parts = (base + '/' + input).split('/')
+  const stack = []
+  for (const p of parts) {
+    if (!p || p === '.') continue
+    if (p === '..') stack.pop()
+    else stack.push(p)
+  }
+  return '/' + stack.join('/')
+}
+
+function tokenize(line) {
+  if (!line) return []
+  const re = /"([^"]*)"|'([^']*)'|[^\s]+/g
+  const out = []
+  let m
+  while ((m = re.exec(line))) out.push(m[1] ?? m[2] ?? m[0])
+  return out
+}
+
+/* ========= Top-level Terminal (stable identity; won't remount) ========= */
+const Terminal = memo(function Terminal({ power, api, onOpenTab, visible, onRequestClose }) {
+  const containerRef = useRef(null)
+  const inputRef = useRef(null)
+
+  const HEADER = 'GersonOS v0.9 — type "help" to get started. Press ESC to leave Terminal'
+
+  // Controlled input & persistent state
+  const [cmdInput, setCmdInput] = useState('')
+  const [lines, setLines] = useState(() => ([
+    HEADER,
+    ''
+  ]))
+  const [history, setHistory] = useState([])
+  const [histIndex, setHistIndex] = useState(-1)
+  const [cwd, setCwd] = useState('/home/gerson')
+
+  // ---- Classic typing sounds (WebAudio) ----
+  const audioCtxRef = useRef(null)
+  const noiseBufRef = useRef(null)
+  const readyRef = useRef(false)
+
+  function ensureAudio() {
+    if (readyRef.current) return
+    const Ctx = window.AudioContext || window.webkitAudioContext
+    if (!Ctx) return
+    const ctx = new Ctx()
+    audioCtxRef.current = ctx
+
+    // Make 1s of white noise (we'll play tiny slices for key clicks)
+    const seconds = 1
+    const rate = ctx.sampleRate
+    const buffer = ctx.createBuffer(1, rate * seconds, rate)
+    const data = buffer.getChannelData(0)
+    for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1)
+
+    noiseBufRef.current = buffer
+    // Try to resume immediately after user gesture
+    ctx.resume().catch(()=>{})
+    readyRef.current = true
+  }
+
+  function playKey(kind='char') {
+    const ctx = audioCtxRef.current
+    const noise = noiseBufRef.current
+    if (!ctx || !noise || ctx.state !== 'running') return
+
+    const now = ctx.currentTime
+    // random short slice in the noise buffer
+    const sliceDur = kind === 'enter' ? 0.07 : kind === 'backspace' ? 0.06 : 0.045
+    const startOffset = Math.random() * (noise.duration - sliceDur - 0.01)
+
+    const src = ctx.createBufferSource()
+    src.buffer = noise
+    src.loop = false
+    src.playbackRate.value = 1 + (Math.random() * 0.08 - 0.04) // slight variance
+
+    // filter chain to shape the click (hi-pass + subtle bandpass thunk)
+    const hp = ctx.createBiquadFilter()
+    hp.type = 'highpass'
+    hp.frequency.value = kind === 'enter' ? 1200 : kind === 'backspace' ? 1400 : 1800
+
+    const bp = ctx.createBiquadFilter()
+    bp.type = 'bandpass'
+    bp.frequency.value = kind === 'enter' ? 300 : kind === 'backspace' ? 380 : 420
+    bp.Q.value = 1.2
+
+    const gain = ctx.createGain()
+    gain.gain.setValueAtTime(0.0001, now)
+    const peak = kind === 'enter' ? 0.08 : kind === 'backspace' ? 0.06 : 0.05
+    gain.gain.exponentialRampToValueAtTime(peak, now + 0.006)
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + sliceDur)
+
+    src.connect(hp).connect(bp).connect(gain).connect(ctx.destination)
+    src.start(now, startOffset, sliceDur + 0.02)
+  }
+
+  // Minimal virtual FS (expanded with your new items)
+  const VFS = useMemo(() => ({
+    '/': {
+      home: {
+        gerson: {
+          'README.txt': 'Welcome to my room! Use `projects` or `help`.',
+          projects: {
+            'Patagonia.md': 'Patagonia Education donations platform — Stripe, multi-step flow, email automations.',
+            'MiddDash.md': 'Student-run food delivery service — admin dashboard & payments improvements.',
+            'MCG.md': 'Middlebury Consulting Group — CPI analytics in R: cleaning, categorization, visualizations.',
+            'ShinyApp.url': URL('https://ghernandezlima.shinyapps.io/Final_projectAPP/'),
+            'MiddDash.url': URL('https://midddash.com'),
+            '3DPortfolio.md': '3D interactive portfolio (this site) — React, drei, fiber, CRT effects, terminal.',
+          },
+          socials: {
+            'github.url': URL('https://github.com/GersonHernandez10'),
+            'linkedin.url': URL('https://linkedin.com/in/gerson-hernandez-lima-0408212b6'),
+            'instagram.url': URL('https://www.instagram.com/813.gerson/'),
+            'email.txt': 'gersonhernandez950@gmail.com',
+          },
+          'resume.url': URL('/resume.pdf'),
+        }
+      }
+    }
+  }), [])
+
+  function getNode(path) {
+    const norm = normalizePath('/', path)
+    const parts = norm.split('/').filter(Boolean)
+    let node = VFS['/']
+    for (const p of parts) {
+      if (!node || typeof node !== 'object') return undefined
+      node = node[p]
+    }
+    return node
+  }
+
+  function listDir(path) {
+    const node = getNode(path)
+    if (!isDir(node)) return null
+    return Object.keys(node).sort()
+  }
+
+  function print(...newLines) {
+    setLines((prev) => [...prev, ...newLines])
+  }
+
+  function prompt() {
+    const rel = cwd.replace('/home/gerson', '~')
+    return `gerson@room:${rel}$ `
+  }
+
+  function openLink(href) {
+    try {
+      window.open(href, '_blank', 'noopener,noreferrer')
+      print(`opening ${href}`)
+    } catch {
+      print(`failed to open: ${href}`)
+    }
+  }
+
+  function handleCmd(raw) {
+    const cmdline = raw.trim()
+    if (!cmdline) { print(''); return }
+    const args = tokenize(cmdline)
+    const cmd = args[0]
+    const rest = args.slice(1)
+
+    // record history
+    setHistory((h) => [...h, cmdline])
+    setHistIndex(-1)
+
+    print(prompt() + cmdline)
+
+    switch (cmd) {
+      case 'help': {
+        print(
+          'Core: help, clear, history, whoami, date, echo, pwd, ls, cd, cat, open',
+          'Portfolio: projects, project <name>, resume, contact',
+          'Shortcuts: open midddash | shinyapp | github | linkedin | instagram',
+          'CRT: degauss, static [ms], glitch on|off, glitch stutter <0..2>, glitch green <0..2>',
+          ''
+        )
+        break
+      }
+      case 'clear': {
+        setLines([HEADER, ''])
+        break
+      }
+      case 'history': {
+        if (history.length === 0) { print('(empty)'); break }
+        history.forEach((h, i) => print(`${i + 1}  ${h}`))
+        break
+      }
+      case 'whoami': { print('gerson'); break }
+      case 'date':
+      case 'time': { print(new Date().toLocaleString()); break }
+      case 'echo': { print(rest.join(' ')); break }
+      case 'pwd': { print(cwd); break }
+      case 'ls': {
+        const target = rest[0] ? normalizePath(cwd, rest[0]) : cwd
+        const items = listDir(target)
+        if (!items) { print(`ls: not a directory: ${target}`); break }
+        print(items.join('  '))
+        break
+      }
+      case 'cd': {
+        const target = rest[0] ? normalizePath(cwd, rest[0]) : '/home/gerson'
+        const node = getNode(target)
+        if (!node) print(`cd: no such file or directory: ${target}`)
+        else if (!isDir(node)) print(`cd: not a directory: ${target}`)
+        else setCwd(target)
+        break
+      }
+      case 'cat': {
+        if (!rest[0]) { print('cat: missing file'); break }
+        const target = normalizePath(cwd, rest[0])
+        const node = getNode(target)
+        if (!node) print(`cat: no such file: ${target}`)
+        else if (isUrlFile(node)) print(`(url) ${node.__url} — try: open ${rest[0]}`)
+        else if (typeof node === 'string') print(node)
+        else print(`cat: ${rest[0]}: is a directory`)
+        break
+      }
+      case 'open': {
+        const target = (rest[0] || '').toLowerCase()
+        if (!target) { print('open: missing target'); break }
+        if (['resume', 'cv'].includes(target)) { onOpenTab('resume'); print('opening resume tab'); break }
+        if (['about'].includes(target)) { onOpenTab('about'); print('opening about tab'); break }
+        if (['socials', 'contact'].includes(target)) { onOpenTab('socials'); print('opening socials tab'); break }
+        if (target === 'github') { openLink('https://github.com/GersonHernandez10'); break }
+        if (target === 'linkedin') { openLink('https://linkedin.com/in/gerson-hernandez-lima-0408212b6'); break }
+        if (target === 'instagram') { openLink('https://www.instagram.com/813.gerson/'); break }
+        if (target === 'midddash') { openLink('https://midddash.com'); break }
+        if (target === 'shiny' || target === 'shinyapp') { openLink('https://ghernandezlima.shinyapps.io/Final_projectAPP/'); break }
+        const node = getNode(normalizePath(cwd, target))
+        if (isUrlFile(node)) { openLink(node.__url); break }
+        if (/^https?:\/\//i.test(rest[0])) { openLink(rest[0]); break }
+        print(`open: unknown target "${rest[0]}"`)
+        break
+      }
+      case 'projects': {
+        print('Projects:',
+              '  Patagonia — Stripe donation flow (project Patagonia)',
+              '  MiddDash — delivery platform & admin (project MiddDash)',
+              '  MCG — Middlebury Consulting Group (project MCG)',
+              '  ShinyApp — R Shiny final project (project ShinyApp)',
+              '  3DPortfolio — this site (project 3DPortfolio)',
+              'Use: project <name>   e.g., project ShinyApp')
+        break
+      }
+      case 'project': {
+        const name = (rest[0] || '').toLowerCase()
+        if (name === 'patagonia') {
+          print('Patagonia Education — donation platform',
+                '• Custom multi-step donations with Stripe; automated email workflows.',
+                '• Emphasis on reliability, UX polish, and data integrity.',
+                'Tip: open resume | open socials')
+        } else if (name === 'midddash') {
+          print('MiddDash — student-run delivery platform',
+                '• Admin dashboard improvements, payments, operational tooling.',
+                '• Partial-save forms, validation, and webhooks.',
+                'Open site: open midddash')
+        } else if (name === 'mcg' || name === 'middleburyconsultinggroup' || name === 'consulting') {
+          print('Middlebury Consulting Group — Data Analytics',
+                '• Cleaned CPI datasets; R scripts for categorization; built client-facing visualizations.')
+        } else if (name === 'shinyapp' || name === 'shiny') {
+          print('R Shiny Final Project — Interactive analytics app',
+                '• R + Shiny dashboards, filters, and interactive plots.',
+                'Open app: open shinyapp')
+        } else if (name === '3dportfolio' || name === 'portfolio' || name === '3d') {
+          print('3D Portfolio — React + drei/fiber',
+                '• Interactive room, CRT effects, in-screen terminal.',
+                '• Custom overlays for degauss, scanlines, stutter tuning.')
+        } else {
+          print('project: unknown. Try: Patagonia | MiddDash | MCG | ShinyApp | 3DPortfolio')
+        }
+        break
+      }
+      case 'resume': { onOpenTab('resume'); print('opening resume tab'); break }
+      case 'contact': {
+        print('Email: gersonhernandez950@gmail.com',
+              'GitHub: github.com/GersonHernandez10',
+              'LinkedIn: linkedin.com/in/gerson-hernandez-lima-0408212b6')
+        break
+      }
+
+      // ---- CRT / glitch commands  ----
+      case 'degauss': { api?.degauss?.(); print('bzzt… degauss pulse triggered'); break }
+      case 'static': {
+        const ms = parseInt(rest[0], 10)
+        api?.staticBurst?.(Number.isFinite(ms) ? ms : undefined)
+        print(`colored static burst${Number.isFinite(ms) ? ` (${ms}ms)` : ''}`)
+        break
+      }
+      case 'glitch': {
+        const sub = (rest[0] || '').toLowerCase()
+        if (sub === 'on') {
+          api?.setStutter?.(1)
+          api?.setGreenStrength?.(1)
+          print('glitches enabled')
+        } else if (sub === 'off') {
+          api?.setStutter?.(0)
+          api?.setGreenStrength?.(0)
+          print('glitches disabled')
+        } else if (sub === 'stutter') {
+          const v = Math.max(0, Math.min(2, parseFloat(rest[1])))
+          if (Number.isFinite(v)) { api?.setStutter?.(v); print(`stutter strength = ${v}`) }
+          else print('usage: glitch stutter <0..2>')
+        } else if (sub === 'green') {
+          const v = Math.max(0, Math.min(2, parseFloat(rest[1])))
+          if (Number.isFinite(v)) { api?.setGreenStrength?.(v); print(`green glitch strength = ${v}`) }
+          else print('usage: glitch green <0..2>')
+        } else {
+          print('usage: glitch on|off | glitch stutter <0..2> | glitch green <0..2>')
+        }
+        break
+      }
+
+      default: { print(`command not found: ${cmd}`) }
+    }
+
+    print('')
+  }
+
+  // Focus + autoscroll
+  useEffect(() => {
+    if (visible && power > 0.25) {
+      inputRef.current?.focus()
+      const el = inputRef.current
+      if (el) {
+        const end = el.value.length
+        el.setSelectionRange(end, end)
+      }
+    }
+  }, [visible, power])
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [lines])
+
+  const onKeyDownCapture = (e) => {
+    // Eat Escape so it can't bubble to any global handlers
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      e.stopPropagation()
+      e.nativeEvent?.stopImmediatePropagation?.()
+      onRequestClose?.()
+    }
+  }
+
+  const onInputKeyDown = (e) => {
+    // Sounds
+    if (!readyRef.current) ensureAudio()
+
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      playKey('enter')
+      const value = cmdInput
+      setCmdInput('')
+      handleCmd(value)
+      return
+    }
+    if (e.key === 'Backspace') {
+      playKey('backspace')
+      return
+    }
+    // printable characters
+    if (e.key && e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
+      playKey('char')
+    }
+
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      if (history.length === 0) return
+      const idx = histIndex < 0 ? history.length - 1 : Math.max(0, histIndex - 1)
+      setHistIndex(idx)
+      setCmdInput(history[idx] || '')
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      if (history.length === 0) return
+      const idx = histIndex < 0 ? -1 : Math.min(history.length - 1, histIndex + 1)
+      setHistIndex(idx)
+      setCmdInput(idx === -1 ? '' : (history[idx] || ''))
+    } else if (e.key === 'c' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault()
+      print(prompt() + '^C', '')
+    }
+  }
+
+  const disabled = power <= 0.25
+
+  return (
+    <div
+      onKeyDownCapture={onKeyDownCapture}
+      onPointerDown={(e)=>e.stopPropagation()}
+      tabIndex={-1}
+      style={{
+        position: 'absolute',
+        inset: 12,
+        display: visible ? 'grid' : 'none', // stays mounted => state persists
+        gridTemplateRows: '1fr auto',
+        gap: 8,
+        fontFamily: "'VT323', monospace",
+        color: '#d1fae5',
+        background: '#061014',
+        border: '1px solid #0a1f27',
+        borderRadius: 8,
+        padding: 12,
+        opacity: power,
+        transition: 'opacity .15s linear',
+        filter: `brightness(${0.5 + 0.5 * power})`,
+        zIndex: 5, // below glitch overlays (zIndex:7)
+      }}
+    >
+      <div
+        ref={containerRef}
+        style={{
+          overflow: 'auto',
+          whiteSpace: 'pre-wrap',
+          fontSize: 22,
+          lineHeight: 1.2,
+          textShadow: '0 0 2px rgba(0,255,180,0.1)',
+        }}
+      >
+        {lines.map((ln, i) => <div key={i}>{ln}</div>)}
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ fontSize: 22, color: '#34d399' }}>{`gerson@room:${cwd.replace('/home/gerson','~')}$ `}</div>
+        <input
+          ref={inputRef}
+          disabled={disabled}
+          value={cmdInput}
+          onChange={(e)=>setCmdInput(e.target.value)}
+          onKeyDown={onInputKeyDown}
+          placeholder={disabled ? 'power off' : 'type a command…'}
+          style={{
+            flex: 1,
+            fontSize: 22,
+            fontFamily: "'VT323', monospace",
+            background: 'transparent',
+            color: '#e5e7eb',
+            border: 'none',
+            outline: 'none',
+            caretColor: '#34d399',
+            textShadow: '0 0 2px rgba(255,255,255,0.1)',
+          }}
+        />
+      </div>
+    </div>
+  )
+})
 
 /* ========== In-monitor UI  ========== */
-function ScreenDesktopUI({ power = 1 }) {
+function ScreenDesktopUI({ power = 1, terminalAPI }) {
   const [tab, setTab] = useState('about')
+
+  // Terminal visibility (no tab; press T)
+  const [showTerminal, setShowTerminal] = useState(false)
+
+  // Toggle Terminal with keyboard , but do NOT power off on Esc
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.repeat) return
+      const tag = (e.target?.tagName || '').toLowerCase()
+      const isTyping = tag === 'input' || tag === 'textarea' || e.target?.isContentEditable
+      if (e.code === 'KeyT' && power > 0.25) {
+        if (!isTyping) {
+          e.preventDefault()
+          e.stopPropagation()
+          setShowTerminal((v) => !v)
+        }
+      }
+      // Esc is handled inside Terminal via capture to avoid bubbling to app
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [power])
 
   const stopBubble = (e) => {
     e.stopPropagation()
@@ -159,6 +641,12 @@ function ScreenDesktopUI({ power = 1 }) {
     </div>
   )
 
+  const Link = ({ href, children }) => (
+    <a href={href} target="_blank" rel="noreferrer" style={{ color: '#60a5fa', textDecoration: 'none' }}>
+      {children}
+    </a>
+  )
+
   return (
     <>
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&display=swap" />
@@ -181,6 +669,7 @@ function ScreenDesktopUI({ power = 1 }) {
           opacity: power,
           transition: 'opacity .18s linear',
           filter: `brightness(${0.4 + 0.6 * power}) contrast(${0.9 + 0.2 * power})`,
+          position: 'relative', // for terminal overlay
         }}
       >
         <div
@@ -197,13 +686,14 @@ function ScreenDesktopUI({ power = 1 }) {
           <strong style={{ fontSize: 30, opacity: power }}>GersonOS</strong>
           <div style={{ display: 'flex', gap: 10 }}>
             <Tab id="about">About</Tab>
-            <Tab id="work">Experience</Tab>
+            <Tab id="experience">Experience</Tab>
             <Tab id="resume">Resume</Tab>
             <Tab id="socials">Socials</Tab>
+            {/* (no Terminal tab; press T to toggle) */}
           </div>
         </div>
 
-        <div style={{ flex: 1, overflow: 'auto', padding: 20 }}>
+        <div style={{ flex: 1, overflow: 'auto', padding: 20, position: 'relative' }}>
           {tab === 'about' && (
             <div>
               <h3 style={{ margin: '6px 0 8px 0', fontSize: 50, opacity: power }}>About Me</h3>
@@ -245,6 +735,78 @@ function ScreenDesktopUI({ power = 1 }) {
             </div>
           )}
 
+          {tab === 'experience' && (
+            <div style={{ opacity: power }}>
+              <h3 style={{ margin: '6px 0 12px 0', fontSize: 50 }}>Experience</h3>
+
+              <section style={{ marginBottom: 18 }}>
+                <h4 style={{ fontSize: 38, color: '#fca5a5', margin: '0 0 6px 0' }}>
+                  Patagonia Education — Donations Platform
+                </h4>
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 26, lineHeight: 1.15 }}>
+                  <li>Designed and implemented a custom Stripe payment system to handle both one-time and recurring donations, with campaign-specific metadata tracking.</li>
+                  <li>Built multi-step Wix Velo forms that progressively saved donor information to a database, ensuring data retention even if forms were not fully completed.</li>
+                  <li>Implemented webhook-based event handling to synchronize Stripe events with the Wix database in real time.</li>
+                  
+                </ul>
+              </section>
+
+              <section style={{ marginBottom: 18 }}>
+                <h4 style={{ fontSize: 38, color: '#34d399', margin: '0 0 6px 0' }}>
+                  MiddDash — Student-run Delivery Platform
+                </h4>
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 26, lineHeight: 1.15 }}>
+                  <li>mplemented admin-side updates and dashboards to manage orders, track drivers, and adjust delivery settings in real time.</li>
+                  <li>Managed GitHub-based development workflow and coordinated version control across contributors.</li>
+                  <li>Designed and implemented a custom email automation system that sent personalized, real-time order status updates to customers based on food preparation and delivery stage.</li>
+                  <li>Built and deployed a paycheck automation system for delivery drivers, reducing manual payroll processing by over 80%.</li>
+                  <li>Developed an automatic restaurant scheduling system that opened and closed online ordering for restaurants based on pre-set daily and time-specific schedules.</li>
+                  <li>Managed and maintained database</li>
+                  <li>Live site: <Link href="https://midddash.com">midddash.com</Link></li>
+                </ul>
+              </section>
+
+              <section style={{ marginBottom: 18 }}>
+                <h4 style={{ fontSize: 38, color: '#f59e0b', margin: '0 0 6px 0' }}>
+                  Middlebury Consulting Group — Data Analytics
+                </h4>
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 26, lineHeight: 1.15 }}>
+                  <li>Conducted an in-depth analysis of Consumer Price Index (CPI) data to evaluate economic trends and their impact on client decision-making.</li>
+                  <li>Cleaned, transformed, and organized large datasets in R, ensuring accuracy and consistency across multiple data sources.</li>
+                  <li>Developed custom R scripts to automate data categorization, statistical calculations, and summary reporting.</li>
+                  <li>Created clear, visually engaging data visualizations using R to present findings to non-technical stakeholders.</li>
+                </ul>
+              </section>
+
+              <section style={{ marginBottom: 18 }}>
+                <h4 style={{ fontSize: 38, color: '#22d3ee', margin: '0 0 6px 0' }}>
+                  R Shiny Final Project — Interactive Analytics App
+                </h4>
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 26, lineHeight: 1.15 }}>
+                  <li>Designed and developed an interactive R Shiny web application to analyze the relationship between antenatal steroid use and NEC incidence/mortality in preterm infants.</li>
+                  <li>Processed and visualized a dataset of ~80,000 NICU records, stratified by gestational age and clinical outcomes.</li>
+                  <li>Implemented thousands of simulated permutation tests to assess statistical significance across multiple gestational age groups.</li>
+                  <li>Integrated dynamic data visualizations and interactive controls, enabling users to explore NEC incidence and mortality trends by steroid exposure.</li>
+                  <li>Interpreted statistical outputs and validated results across training and holdout datasets, highlighting potential confounding by indication in observed associations.</li>
+                  <li>Deployed the application online using shinyapps.io, ensuring public accessibility for research and educational purposes.</li>
+                  <li>Try it: <Link href="https://ghernandezlima.shinyapps.io/Final_projectAPP/">Shiny App</Link></li>
+                </ul>
+              </section>
+
+              <section>
+                <h4 style={{ fontSize: 38, color: '#a78bfa', margin: '0 0 6px 0' }}>
+                  3D Portfolio — This Site
+                </h4>
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 26, lineHeight: 1.15 }}>
+                  <li>Designed and developed a fully interactive 3D personal portfolio using React, Three.js, and @react-three/fiber to showcase projects in a dynamic environment.</li>
+                  <li>Created and optimized custom 3D models in Blender, exporting and integrating them into the web.</li>
+                  <li>Managed the full development cycle, including GitHub version control, asset optimization, and deployment pipeline setup.</li>
+                  <li>Deployed the application with optimized asset loading for smooth performance on desktop and mobile browsers.</li>
+                </ul>
+              </section>
+            </div>
+          )}
+
           {tab === 'resume' && (
             <div style={{ height: '100%', opacity: power }}>
               <iframe
@@ -266,6 +828,15 @@ function ScreenDesktopUI({ power = 1 }) {
               </ul>
             </div>
           )}
+
+          {/* Terminal overlay */}
+          <Terminal
+            power={power}
+            api={terminalAPI}
+            onOpenTab={setTab}
+            visible={showTerminal}
+            onRequestClose={() => setShowTerminal(false)}
+          />
         </div>
       </div>
     </>
@@ -299,15 +870,20 @@ function PCInteractive({
   const streakRef = useRef(0)
   const lastEffectiveRef = useRef(false)
   const streakHoldRef = useRef(0)
-  const STREAK_HOLD_MS = 260 // hold briefly after power-off
+  const STREAK_HOLD_MS = 260
 
-  // NEW: degauss trigger state
+  // Degauss pulse
   const [degauss, setDegauss] = useState(false)
   const lastOnRef = useRef(false)
 
-  // NEW: ultra-rare colored static burst
+  // Ultra-rare colored static
   const [staticBurst, setStaticBurst] = useState(false)
-  const [staticHue, setStaticHue] = useState(0) // 0=red, 60=yellow, 120=green, 180=cyan, 240=blue, 300=magenta
+  const [staticHue, setStaticHue] = useState(0)
+  const HUES = [0, 60, 120, 180, 240, 300] // R,Y,G,C,B,M
+
+  // Glitch tuning
+  const [stutterStrength, setStutterStrength] = useState(1) // 0..2
+  const [greenStrength, setGreenStrength] = useState(1)     // 0..2
 
   // Random green glitches
   const [greenLineOn, setGreenLineOn] = useState(false)  // horizontal line
@@ -322,7 +898,7 @@ function PCInteractive({
   const rollingRef = useRef(false)
   const ROLL_ENABLED = true
 
-  // Occasional vertical roll (rare, subtle)
+  // Occasional vertical roll
   useEffect(() => {
     if (!ROLL_ENABLED) return
     let alive = true, t, raf
@@ -371,9 +947,9 @@ function PCInteractive({
 
     schedule()
     return () => { alive = false; clearTimeout(t); cancelAnimationFrame(raf) }
-  }, [rollY]) // ROLL_ENABLED is a constant
+  }, [rollY])
 
-  // Schedule occasional green horizontal line
+  //  occasional green horizontal line
   useEffect(() => {
     let alive = true, t1, t2
     const loop = () => {
@@ -392,7 +968,7 @@ function PCInteractive({
     return () => { alive = false; clearTimeout(t1); clearTimeout(t2) }
   }, [])
 
-  // Schedule occasional green vertical tear (1–2px column)
+  // Schedule occasional green vertical tear
   useEffect(() => {
     let alive = true, t1, t2
     const loop = () => {
@@ -412,18 +988,17 @@ function PCInteractive({
     return () => { alive = false; clearTimeout(t1); clearTimeout(t2) }
   }, [])
 
-  // Schedule ULTRA-RARE colored static burst
+  //  ULTRA-RARE supa cool colored static burst
   useEffect(() => {
     let alive = true, t1, t2
-    const hues = [0, 60, 120, 180, 240, 300] // R, Y, G, C, B, M
     const loop = () => {
       const delay = 45000 + Math.random() * 60000 // 45–105s
       t1 = setTimeout(() => {
         if (!alive) return
         if (powerRef.current > 0.6) {
-          setStaticHue(hues[(Math.random() * hues.length) | 0])
+          setStaticHue(HUES[(Math.random() * HUES.length) | 0])
           setStaticBurst(true)
-          t2 = setTimeout(() => { if (alive) setStaticBurst(false) }, 160 + Math.random() * 220) // ~160–380ms
+          t2 = setTimeout(() => { if (alive) setStaticBurst(false) }, 160 + Math.random() * 220)
         }
         loop()
       }, delay)
@@ -469,7 +1044,6 @@ function PCInteractive({
     const powerTarget = effectiveActive ? 1 : 0
     powerRef.current = THREE.MathUtils.damp(powerRef.current, powerTarget, 4.0, dt)
 
-    // Push state from refs (throttled by comparison)
     if (Math.abs(powerRef.current - power) > 0.002) setPower(powerRef.current)
     if (Math.abs(shutterRef.current - shutter) > 0.002) setShutter(shutterRef.current)
 
@@ -481,7 +1055,7 @@ function PCInteractive({
       mat.opacity = THREE.MathUtils.damp(mat.opacity ?? coverTarget, coverTarget, 10, dt)
     }
 
-    // White streak logic (appears on power-down)
+    // White streak logic 
     const s = shutterRef.current
     const closingShape = (1 - s) * s * 4
     const shaped = THREE.MathUtils.clamp(closingShape, 0, 1)
@@ -567,6 +1141,21 @@ function PCInteractive({
 
   const safeOnClick = pcActive ? undefined : onClick
 
+  // Expose small API to the Terminal
+  const terminalAPI = useMemo(() => ({
+    degauss: () => {
+      setDegauss(true)
+      setTimeout(() => setDegauss(false), 900)
+    },
+    staticBurst: (ms) => {
+      setStaticHue(HUES[(Math.random() * HUES.length) | 0])
+      setStaticBurst(true)
+      setTimeout(() => setStaticBurst(false), Math.max(120, Math.min(1000, ms ?? 280)))
+    },
+    setStutter: (v) => setStutterStrength(Math.max(0, Math.min(2, v))),
+    setGreenStrength: (v) => setGreenStrength(Math.max(0, Math.min(2, v))),
+  }), [])
+
   return (
     <group ref={groupRef} position={position} scale={scale} onClick={safeOnClick}>
       <primitive object={scene} />
@@ -649,8 +1238,8 @@ function PCInteractive({
 /* Frame pacing stutter */
 @keyframes crtStutter {
   0%, 20%, 23%, 50%, 53%, 80%, 83%, 100% { opacity: 1; }
-  21%, 51%, 81% { opacity: 0.94; }
-  22%, 52%, 82% { opacity: 0.88; }
+  21%, 51%, 81% { opacity: ${1 - 0.06 * stutterStrength}; }
+  22%, 52%, 82% { opacity: ${1 - 0.12 * stutterStrength}; }
 }
                   `}</style>
 
@@ -675,7 +1264,7 @@ function PCInteractive({
                       clipPath: shutterClip,
                       overflow:'hidden',
                     }}>
-                      {/* UI with (optional) vertical roll */}
+                      {/* UI with vertical roll */}
                       <div
                         style={{
                           width: '100%',
@@ -684,10 +1273,10 @@ function PCInteractive({
                           willChange: 'transform'
                         }}
                       >
-                        <ScreenDesktopUI power={power} />
+                        <ScreenDesktopUI power={power} terminalAPI={terminalAPI} />
                       </div>
 
-                      {/* Edge masks during roll to hide seams (subtle) */}
+                      {/* Edge masks during roll to hide seams  */}
                       {ROLL_ENABLED && Math.abs(rollY) > 0.5 && (
                         <>
                           <div
@@ -800,15 +1389,15 @@ function PCInteractive({
                         }}
                       />
 
-                      {/* NEW: frame pacing stutter (subtle brightness hiccups) */}
+                      {/* frame pacing stutter  */}
                       <div
                         style={{
                           pointerEvents:'none',
                           position:'absolute', inset:0,
                           background:'rgba(255,255,255,0.035)',
                           mixBlendMode:'screen',
-                          opacity: power,
-                          animation: 'crtStutter 2.4s steps(60) infinite',
+                          opacity: power * stutterStrength,
+                          animation: 'crtStutter 2400ms steps(60) infinite',
                         }}
                       />
 
@@ -837,7 +1426,7 @@ function PCInteractive({
                               height:'2px',
                               background: 'linear-gradient(to bottom, rgba(0,255,0,0) 0%, rgba(0,255,140,0.95) 50%, rgba(0,255,0,0) 100%)',
                               filter: 'blur(0.3px)',
-                              opacity: Math.min(1, power + 0.25),
+                              opacity: Math.min(1, (power + 0.25) * greenStrength),
                               mixBlendMode:'screen',
                             }}
                           />
@@ -849,7 +1438,7 @@ function PCInteractive({
                               height:'12px',
                               background: 'linear-gradient(to bottom, rgba(0,255,100,0) 0%, rgba(0,255,100,0.28) 50%, rgba(0,255,100,0) 100%)',
                               filter: 'blur(1px)',
-                              opacity: Math.min(1, power + 0.15),
+                              opacity: Math.min(1, (power + 0.15) * greenStrength),
                               mixBlendMode:'screen',
                             }}
                           />
@@ -867,7 +1456,7 @@ function PCInteractive({
                               width: `${greenTearW}px`,
                               background: 'linear-gradient(to right, rgba(0,255,120,0), rgba(0,255,120,0.95), rgba(0,255,120,0))',
                               filter: 'blur(0.4px)',
-                              opacity: Math.min(1, power + 0.25),
+                              opacity: Math.min(1, (power + 0.25) * greenStrength),
                               mixBlendMode:'screen',
                             }}
                           />
@@ -879,14 +1468,14 @@ function PCInteractive({
                               width:'12px',
                               background: 'linear-gradient(to right, rgba(0,255,120,0), rgba(0,255,120,0.26), rgba(0,255,120,0))',
                               filter: 'blur(1px)',
-                              opacity: Math.min(1, power + 0.15),
+                              opacity: Math.min(1, (power + 0.15) * greenStrength),
                               mixBlendMode:'screen',
                             }}
                           />
                         </div>
                       )}
 
-                      {/* NEW: RGB misalignment overlays during degauss */}
+                      {/* RGB misalignment overlays during degauss */}
                       {degauss && (
                         <>
                           <div
@@ -912,7 +1501,7 @@ function PCInteractive({
                         </>
                       )}
 
-                      {/* NEW: ULTRA-RARE colored static burst */}
+                      {/* ULTRA-RARE colored static burst */}
                       {staticBurst && (
                         <div style={{ pointerEvents:'none', position:'absolute', inset:0, zIndex:7 }}>
                           {/* high-frequency noise layer, tinted via hue-rotate */}
@@ -980,11 +1569,8 @@ function PCInteractive({
 }
 
 /* ================= Photo Frame ================= */
-const PhotoFrameGLB = (props) => (
-  <GLBModel path="/models/photo_frame.glb" cast receive {...props} />
-)
+const PhotoFrameGLB = (props) => <GLBModel path="/models/photo_frame.glb" cast receive {...props} />
 function PhotoFrameFallback({ position, rotation = [0,0,0], scale = 1, onClick }) {
-  // composite: frame + inner plane
   return (
     <group position={position} rotation={rotation} scale={scale} onClick={onClick}>
       <FallbackMesh type="box" args={[0.18, 0.12, 0.015]} color="#111" />
@@ -994,9 +1580,7 @@ function PhotoFrameFallback({ position, rotation = [0,0,0], scale = 1, onClick }
 }
 
 /* ================= Other models ================= */
-const GamingChairGLB = (props) => (
-  <GLBModel path="/models/gaming_chair.glb" cast receive {...props} />
-)
+const GamingChairGLB = (props) => <GLBModel path="/models/gaming_chair.glb" cast receive {...props} />
 function GamingChairFallback({ onClick, position, rotation = [0, 0, 0], scale = 1 }) {
   return (
     <FallbackMesh
@@ -1011,9 +1595,7 @@ function GamingChairFallback({ onClick, position, rotation = [0, 0, 0], scale = 
   )
 }
 
-const SnowboardGLB = (props) => (
-  <GLBModel path="/models/snowboard.glb" cast receive {...props} />
-)
+const SnowboardGLB = (props) => <GLBModel path="/models/snowboard.glb" cast receive {...props} />
 function SnowboardFallback({ onClick, position, scale = 1 }) {
   return (
     <FallbackMesh
@@ -1028,9 +1610,7 @@ function SnowboardFallback({ onClick, position, scale = 1 }) {
   )
 }
 
-const SoccerBallGLB = (props) => (
-  <GLBModel path="/models/soccer_ball.glb" cast receive={false} {...props} />
-)
+const SoccerBallGLB = (props) => <GLBModel path="/models/soccer_ball.glb" cast receive={false} {...props} />
 function SoccerBallFallback({ onClick, position, scale = 1 }) {
   return (
     <FallbackMesh
@@ -1044,23 +1624,18 @@ function SoccerBallFallback({ onClick, position, scale = 1 }) {
   )
 }
 
-const PalmTreeGLB = (props) => (
-  <GLBModel path="/models/palm_tree.glb" cast receive {...props} />
-)
+const PalmTreeGLB = (props) => <GLBModel path="/models/palm_tree.glb" cast receive {...props} />
 function PalmTreeFallback({ onClick, position, scale = 1 }) {
-  // composite: trunk + leaves
   return (
     <group onClick={onClick} position={position} scale={scale}>
-      <FallbackMesh type="cylinder" args={[0.02, 0.05, 0.6, 12]} color="#8b5a2b" position={[0, 0.1, 0]} />
+      <FallbackMesh type="cylinder" args={[0.02, 0.02, 0.08, 12]} color="#8b5a2b" position={[0, 0.1, 0]} />
       <FallbackMesh type="cone" args={[0.35, 0.6, 6]} color="#22c55e" position={[0, 0.45, 0]} receiveShadow />
     </group>
   )
 }
 
 /* ==================== NEW: Desk-top props ==================== */
-const BooksGLB = (props) => (
-  <GLBModel path="/models/books.glb" cast receive {...props} />
-)
+const BooksGLB = (props) => <GLBModel path="/models/books.glb" cast receive {...props} />
 function BooksFallback({ position, rotation = [0,0,0], scale = 1 }) {
   return (
     <FallbackMesh
@@ -1070,14 +1645,12 @@ function BooksFallback({ position, rotation = [0,0,0], scale = 1 }) {
       position={position}
       rotation={rotation}
       scale={scale}
-      raycast={() => null} // preserve non-interactive fallback
+      raycast={() => null}
     />
   )
 }
 
-const PSPGLB = (props) => (
-  <GLBModel path="/models/psp.glb" cast receive {...props} />
-)
+const PSPGLB = (props) => <GLBModel path="/models/psp.glb" cast receive {...props} />
 function PSPFallback({ position, rotation = [0,0,0], scale = 1 }) {
   return (
     <FallbackMesh
@@ -1092,9 +1665,7 @@ function PSPFallback({ position, rotation = [0,0,0], scale = 1 }) {
   )
 }
 
-const RubixCubeGLB = (props) => (
-  <GLBModel path="/models/RubixCube.glb" cast receive {...props} />
-)
+const RubixCubeGLB = (props) => <GLBModel path="/models/RubixCube.glb" cast receive {...props} />
 function RubixCubeFallback({ position, rotation = [0,0,0], scale = 1 }) {
   return (
     <FallbackMesh
@@ -1109,9 +1680,7 @@ function RubixCubeFallback({ position, rotation = [0,0,0], scale = 1 }) {
   )
 }
 
-const PencilsGLB = (props) => (
-  <GLBModel path="/models/pencils.glb" cast receive {...props} />
-)
+const PencilsGLB = (props) => <GLBModel path="/models/pencils.glb" cast receive {...props} />
 function PencilsFallback({ position, rotation = [0,0,0], scale = 1 }) {
   return (
     <FallbackMesh
@@ -1126,10 +1695,25 @@ function PencilsFallback({ position, rotation = [0,0,0], scale = 1 }) {
   )
 }
 
-/* ==================== NEW: Barça corner (grass, net, wall logo) ==================== */
-const GrassGLB = (props) => (
-  <GLBModel path="/models/grass.glb" cast={false} receive {...props} />
-)
+/* ==================== NEW: Sticky Note ==================== */
+const StickNoteGLB = (props) => <GLBModel path="/models/stickNote.glb" cast receive {...props} />
+function StickNoteFallback({ position, rotation=[0,0,0], scale=1 }) {
+  return (
+    <FallbackMesh
+      type="box"
+      args={[0.09, 0.002, 0.09]}
+      color="#fde68a"
+      position={position}
+      rotation={rotation}
+      scale={scale}
+      raycast={() => null}
+      materialProps={{ roughness: 0.8, metalness: 0.0 }}
+    />
+  )
+}
+
+/* ==================== NEW: Barça corner  ==================== */
+const GrassGLB = (props) => <GLBModel path="/models/grass.glb" cast={false} receive {...props} />
 function GrassFallback({ position, rotation=[0,0,0], scale=1 }) {
   return (
     <FallbackMesh
@@ -1144,11 +1728,8 @@ function GrassFallback({ position, rotation=[0,0,0], scale=1 }) {
   )
 }
 
-const GoalNetGLB = (props) => (
-  <GLBModel path="/models/NetFinal.glb" cast receive {...props} />
-)
+const GoalNetGLB = (props) => <GLBModel path="/models/NetFinal.glb" cast receive {...props} />
 function GoalNetFallback({ position, rotation=[0,0,0], scale=1 }) {
-  // composite: posts
   return (
     <group position={position} rotation={rotation} scale={scale}>
       <FallbackMesh type="box" args={[1.6, 0.05, 0.05]} color="#ddd" />
@@ -1158,9 +1739,7 @@ function GoalNetFallback({ position, rotation=[0,0,0], scale=1 }) {
   )
 }
 
-const BarcaLogoGLB = (props) => (
-  <GLBModel path="/models/logos_barcelona.glb" cast receive={false} {...props} />
-)
+const BarcaLogoGLB = (props) => <GLBModel path="/models/logos_barcelona.glb" cast receive={false} {...props} />
 function BarcaLogoFallback({ position, rotation=[0,0,0], scale=1 }) {
   return (
     <FallbackMesh
@@ -1201,13 +1780,14 @@ export default function Room({
       '/models/grass.glb',
       '/models/NetFinal.glb',
       '/models/logos_barcelona.glb',
+      '/models/stickNote.glb', // NEW
     ]
     PRELOAD.forEach((p) => useGLTF.preload(p))
   }, [])
 
   const GOAL_POS = useMemo(() => [-1.2, 0, -1.2], [])
   const GOAL_SCALE = 0.6
-  const BALL_POS = useMemo(() => [-.76, 0.25, -.8], [])
+  const BALL_POS = useMemo(() => [-.76, 0.2, -.9], [])
   const LOGO_POS = useMemo(() => [-1.13, 0.02, -1.4], [])
   const LOGO_ROT = useMemo(() => [0, Math.PI, 0], [])
 
@@ -1301,7 +1881,7 @@ export default function Room({
         <PalmTreeGLB onClick={onBeachClick}  position={[0.9, 0, 0]} rotation={[0, Math.PI * 100, 0]} scale={0.1} />
       </Suspense>
 
-      {/* ========= Desk-top props  ========= */}
+      {/* Desk-top props */}
       <Suspense fallback={<BooksFallback position={[0.4, 0.585, 0.2]} scale={0.4} />}>
         <BooksGLB position={[0.4, 0.58, 0.3]} scale={0.4} />
       </Suspense>
@@ -1318,13 +1898,20 @@ export default function Room({
         <PencilsGLB position={[-0.3, 0.605, 0.2]} rotation={[0, Math.PI * 0.25, 0]} scale={0.02} />
       </Suspense>
 
-      {/* ========= NEW: Barça corner ========= */}
+      {/* NEW: Sticky note on desk near keyboard */}
+      <Suspense
+        fallback={<StickNoteFallback position={[0.12, 0.585, 0.12]} rotation={[0, Math.PI * 0.03, 0]} scale={0.95} />}
+      >
+        <StickNoteGLB position={[-.1, 0.57, .2]} rotation={[0, Math.PI * 0.03, 0]} scale={0.1} />
+      </Suspense>
+
+      {/* Barça corner */}
       <Suspense fallback={<GrassFallback position={[-1.15, 0, -1.3]} rotation={[0,0,0]} scale={.7} />}>
         <GrassGLB position={[-1.15, 0, -1.3]} rotation={[0,0,0]} scale={.7} />
       </Suspense>
 
       <Suspense fallback={<GoalNetFallback position={[-1.2, 0, -1.2]} rotation={[0,Math.PI,0]} scale={0.6} />}>
-        <GoalNetGLB position={[-1.2, 0, -1.2]} rotation={[0,Math.PI,0]} scale={0.6} />
+        <GoalNetGLB position={[-1.2, 0, -1.2]} rotation={[0,Math.PI,0]} scale={0.5} />
       </Suspense>
 
       <Suspense fallback={<BarcaLogoFallback position={[-1.13, 0.02, -1.4]} rotation={[0, Math.PI, 0]} scale={0.5} />}>
