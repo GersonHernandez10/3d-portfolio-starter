@@ -1599,7 +1599,7 @@ function GamingChairFallback({ onClick, position, rotation = [0, 0, 0], scale = 
   )
 }
 
-const SnowboardGLB = (props) => <GLBModel path="/models/snowboard.glb" cast receive {...props} />
+const SnowboardGLB = (props) => <GLBModel path="/models/Snowboard.glb" cast receive {...props} />
 function SnowboardFallback({ onClick, position, scale = 1 }) {
   return (
     <FallbackMesh
@@ -1628,7 +1628,7 @@ function SoccerBallFallback({ onClick, position, scale = 1 }) {
   )
 }
 
-const PalmTreeGLB = (props) => <GLBModel path="/models/palm_tree.glb" cast receive {...props} />
+const PalmTreeGLB = (props) => <GLBModel path="/models/Palm_Tree.glb" cast receive {...props} />
 function PalmTreeFallback({ onClick, position, scale = 1 }) {
   return (
     <group onClick={onClick} position={position} scale={scale}>
@@ -1700,7 +1700,7 @@ function PencilsFallback({ position, rotation = [0,0,0], scale = 1 }) {
 }
 
 /* ==================== NEW: Sticky Note ==================== */
-const StickNoteGLB = (props) => <GLBModel path="/models/stickNote.glb" cast receive {...props} />
+const StickNoteGLB = (props) => <GLBModel path="/models/sticknote.glb" cast receive {...props} />
 function StickNoteFallback({ position, rotation=[0,0,0], scale=1 }) {
   return (
     <FallbackMesh
@@ -1774,9 +1774,9 @@ export default function Room({
       '/models/PC.glb',
       '/models/photo_frame.glb',
       '/models/gaming_chair.glb',
-      '/models/snowboard.glb',
+      '/models/Snowboard.glb',
       '/models/soccer_ball.glb',
-      '/models/palm_tree.glb',
+      '/models/Palm_Tree.glb',
       '/models/books.glb',
       '/models/psp.glb',
       '/models/RubixCube.glb',
@@ -1784,7 +1784,7 @@ export default function Room({
       '/models/grass.glb',
       '/models/NetFinal.glb',
       '/models/logos_barcelona.glb',
-      '/models/stickNote.glb', // NEW
+      '/models/sticknote.glb', 
     ]
     PRELOAD.forEach((p) => useGLTF.preload(p))
   }, [])
