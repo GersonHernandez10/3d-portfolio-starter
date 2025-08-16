@@ -4,6 +4,8 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Suspense, useMemo, useState, useCallback, useRef, useEffect } from 'react'
 import * as THREE from 'three'
 import dynamic from 'next/dynamic'
+import IntroLoader from '../components/IntroLoader'
+import DeviceGate from '../components/DeviceGate'
 
 const Room = dynamic(() => import('../components/Room'), { ssr: false })
 
@@ -101,9 +103,11 @@ function BackArrow({ show, onClick }) {
 }
 
 export default function Page() {
-  const [mode, setMode] = useState('wide')   // 'wide' | 'deskGroup' | 'pcClose' | 'frameClose'
-  const [pcShot, setPcShot] = useState(null) // { pos, look } (THREE.Vector3)
-  const [history, setHistory] = useState([]) // stack of previous modes
+  const [mode, setMode] = useState('wide')
+  const [pcShot, setPcShot] = useState(null)
+  const [history, setHistory] = useState([])
+
+  const [showIntro, setShowIntro] = useState(true)
 
   const goTo = useCallback((nextMode) => {
     setHistory((h) => h.concat(mode))
@@ -161,25 +165,12 @@ export default function Page() {
       <Canvas
         shadows={{ type: THREE.PCFSoftShadowMap }}
         camera={{ position: [-1.8, 1.4, 2.6], fov: 50 }}
-        gl={{
-          // Mild boost so dark materials don’t crush
-          toneMappingExposure: 1.05,
-        }}
+        gl={{ toneMappingExposure: 1.05 }}
       >
-        {/* Slightly darker neutral grey for contrast */}
         <color attach="background" args={['#8f8f8f']} />
-        {/* Very mild fog matching bg to add depth/pop */}
         <fog attach="fog" args={['#8f8f8f', 6, 18]} />
-
-        {/* Lighting: key + cool fill + rim + ambient/hemisphere */}
         <ambientLight intensity={0.25} />
-        <hemisphereLight
-          skyColor={'#dfe7ff'}  // cool sky
-          groundColor={'#2b241f'} //  ground tint
-          intensity={0.35}
-        />
-
-        {/* Key light */}
+        <hemisphereLight skyColor={'#dfe7ff'} groundColor={'#2b241f'} intensity={0.35} />
         <directionalLight
           position={[5, 6.5, 4]}
           intensity={1.0}
@@ -195,29 +186,9 @@ export default function Page() {
           shadow-camera-bottom={-6}
           shadow-normalBias={0.02}
         />
-
-        {/* Cool fill from opposite side to lift dark boards */}
-        <directionalLight
-          position={[-4, 3.5, -2]}
-          intensity={0.55}
-          color={'#e6f0ff'}
-        />
-
-        {/* Rim light from behind to outline dark shapes */}
-        <directionalLight
-          position={[-6, 2.5, 3]}
-          intensity={0.8}
-          color={'#ffffff'}
-        />
-
-        {/* Gentle spotlight toward origin to add specular sparkle */}
-        <spotLight
-          position={[0, 4.5, 2.5]}
-          angle={0.6}
-          penumbra={0.6}
-          intensity={0.35}
-          castShadow
-        />
+        <directionalLight position={[-4, 3.5, -2]} intensity={0.55} color={'#e6f0ff'} />
+        <directionalLight position={[-6, 2.5, 3]} intensity={0.8} color={'#ffffff'} />
+        <spotLight position={[0, 4.5, 2.5]} angle={0.6} penumbra={0.6} intensity={0.35} castShadow />
 
         <Suspense fallback={null}>
           <Room
@@ -234,6 +205,12 @@ export default function Page() {
 
       {/* Back arrow */}
       <BackArrow show={history.length > 0} onClick={goBack} />
+
+      {/* Intro loader overlay */}
+      <IntroLoader show={showIntro} onContinue={() => setShowIntro(false)} />
+
+      {/* HARD MOBILE BLOCK — full-screen overlay on phones/small screens */}
+      <DeviceGate minWidth={900} />
     </div>
   )
 }

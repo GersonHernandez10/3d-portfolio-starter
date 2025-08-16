@@ -124,7 +124,7 @@ function tokenize(line) {
   return out
 }
 
-/* ========= Top-level Terminal (stable identity; won't remount) ========= */
+/* ========= Top-level Terminal  ========= */
 const Terminal = memo(function Terminal({ power, api, onOpenTab, visible, onRequestClose }) {
   const containerRef = useRef(null)
   const inputRef = useRef(null)
@@ -141,7 +141,7 @@ const Terminal = memo(function Terminal({ power, api, onOpenTab, visible, onRequ
   const [histIndex, setHistIndex] = useState(-1)
   const [cwd, setCwd] = useState('/home/gerson')
 
-  // ---- Classic typing sounds (WebAudio) ----
+  // ---- Classic typing sounds  ----
   const audioCtxRef = useRef(null)
   const noiseBufRef = useRef(null)
   const readyRef = useRef(false)
@@ -153,7 +153,7 @@ const Terminal = memo(function Terminal({ power, api, onOpenTab, visible, onRequ
     const ctx = new Ctx()
     audioCtxRef.current = ctx
 
-    // Make 1s of white noise (we'll play tiny slices for key clicks)
+    // Make 1s of white noise 
     const seconds = 1
     const rate = ctx.sampleRate
     const buffer = ctx.createBuffer(1, rate * seconds, rate)
@@ -181,7 +181,7 @@ const Terminal = memo(function Terminal({ power, api, onOpenTab, visible, onRequ
     src.loop = false
     src.playbackRate.value = 1 + (Math.random() * 0.08 - 0.04) // slight variance
 
-    // filter chain to shape the click (hi-pass + subtle bandpass thunk)
+    // filter chain to shape the click
     const hp = ctx.createBiquadFilter()
     hp.type = 'highpass'
     hp.frequency.value = kind === 'enter' ? 1200 : kind === 'backspace' ? 1400 : 1800
@@ -201,7 +201,7 @@ const Terminal = memo(function Terminal({ power, api, onOpenTab, visible, onRequ
     src.start(now, startOffset, sliceDur + 0.02)
   }
 
-  // Minimal virtual FS (expanded with your new items)
+  // Minimal virtual FS 
   const VFS = useMemo(() => ({
     '/': {
       home: {
