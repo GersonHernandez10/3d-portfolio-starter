@@ -12,6 +12,7 @@ import React, {
 import { Html, useGLTF } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import MessageTab from './MessageTab'
 
 /* ===== Helpers ===== */
 function enableShadows(scene, { cast = true, receive = false } = {}) {
@@ -689,6 +690,7 @@ function ScreenDesktopUI({ power = 1, terminalAPI }) {
             <Tab id="experience">Experience</Tab>
             <Tab id="resume">Resume</Tab>
             <Tab id="socials">Socials</Tab>
+            <Tab id="message">Message</Tab>
             {/* (no Terminal tab; press T to toggle) */}
           </div>
         </div>
@@ -729,7 +731,7 @@ function ScreenDesktopUI({ power = 1, terminalAPI }) {
                 <h4 style={{ fontSize: 36, margin: '10px 0 6px 0' }}>Let’s Connect</h4>
                 <p style={{ margin: 0 }}>
                   I’m always open to collaborating on thoughtful projects and exploring new challenges in
-                  software engineering and data-driven solutions.
+                  software engineering and data-driven solutions. BTW this computer is powered by wireless electricity! 
                 </p>
               </div>
             </div>
@@ -828,6 +830,8 @@ function ScreenDesktopUI({ power = 1, terminalAPI }) {
               </ul>
             </div>
           )}
+          {tab === 'message' && <MessageTab power={power} />}
+
 
           {/* Terminal overlay */}
           <Terminal
