@@ -1765,6 +1765,7 @@ export default function Room({
   onSnowboardClick,
   onSoccerClick,
   onBeachClick,
+  onBarcaAreaClick,
   onPCAnchor,
   pcActive = false,
 }) {
@@ -1874,7 +1875,7 @@ export default function Room({
           />
         }
       >
-        <SoccerBallGLB onClick={onSoccerClick} position={BALL_POS} scale={0.16} />
+        <SoccerBallGLB onClick={onBarcaAreaClick} position={BALL_POS} scale={0.16} />
       </Suspense>
 
       <Suspense
@@ -1902,7 +1903,7 @@ export default function Room({
         <PencilsGLB position={[-0.3, 0.605, 0.2]} rotation={[0, Math.PI * 0.25, 0]} scale={0.02} />
       </Suspense>
 
-      {/* NEW: Sticky note on desk near keyboard */}
+      {/*  Sticky note*/}
       <Suspense
         fallback={<StickNoteFallback position={[0.12, 0.585, 0.12]} rotation={[0, Math.PI * 0.03, 0]} scale={0.95} />}
       >
@@ -1911,15 +1912,15 @@ export default function Room({
 
       {/* Barça corner */}
       <Suspense fallback={<GrassFallback position={[-1.15, 0, -1.3]} rotation={[0,0,0]} scale={.7} />}>
-        <GrassGLB position={[-1.15, 0, -1.3]} rotation={[0,0,0]} scale={.7} />
+        <GrassGLB onClick={onBarcaAreaClick} position={[-1.15, 0, -1.3]} rotation={[0,0,0]} scale={.7} />
       </Suspense>
 
       <Suspense fallback={<GoalNetFallback position={[-1.2, 0, -1.2]} rotation={[0,Math.PI,0]} scale={0.6} />}>
-        <GoalNetGLB position={[-1.2, 0, -1.2]} rotation={[0,Math.PI,0]} scale={0.5} />
+        <GoalNetGLB onClick={onBarcaAreaClick} position={[-1.2, 0, -1.2]} rotation={[0,Math.PI,0]} scale={0.5} />
       </Suspense>
 
       <Suspense fallback={<BarcaLogoFallback position={[-1.13, 0.02, -1.4]} rotation={[0, Math.PI, 0]} scale={0.5} />}>
-        <BarcaLogoGLB position={[-1.13, 0.02, -1.4]} rotation={[0, Math.PI, 0]} scale={0.4} />
+        <BarcaLogoGLB onClick={onBarcaAreaClick} position={[-1.15, 0.02, -1.35]} rotation={[0, Math.PI, 0]} scale={0.45} />
       </Suspense>
     </group>
   )

@@ -23,9 +23,20 @@ function CameraRig({ mode, pcShot }) {
 
   const shots = useMemo(
     () => ({
-      wide:      { pos: new THREE.Vector3(-1.8, 1.4, 2.6), look: new THREE.Vector3(0, 0.7, 0.1) },
-      deskGroup: { pos: new THREE.Vector3( 0.0, 1.0, 0.8),  look: new THREE.Vector3(0, 0.60, 0.10) },
-      frameClose:{ pos: new THREE.Vector3(-0.28, 0.7, 0.5), look: new THREE.Vector3(-0.40, 0.57, 0.17) },
+      wide:         { pos: new THREE.Vector3(-1.8, 1.4, 2.6),  look: new THREE.Vector3( 0.00, 0.70,  0.10) },
+      deskGroup:    { pos: new THREE.Vector3( 0.0, 1.0, 0.8),   look: new THREE.Vector3( 0.00, 0.60,  0.10) },
+      frameClose:   { pos: new THREE.Vector3(-0.28, 0.7, 0.5),  look: new THREE.Vector3(-0.40, 0.57,  0.17) },
+
+      //
+      snowboardClose: {
+
+        pos:  new THREE.Vector3( 0, 1, -.3),
+        look: new THREE.Vector3( 0.00, 0.9, -1.9),
+      },
+      barcaClose: {
+        pos:  new THREE.Vector3(-1.15, 1, .01),
+        look: new THREE.Vector3(-1.145, 0.30, -1.4),
+      },
     }),
     []
   )
@@ -160,6 +171,18 @@ export default function Page() {
     else if (mode === 'deskGroup') goTo('frameClose')
   }, [mode, goTo])
 
+  // NEW: close-up handlers
+  const onSnowboardClick = useCallback(() => {
+    if (mode === 'wide') goTo('snowboardClose')
+  }, [mode, goTo])
+
+  const onBarcaAreaClick = useCallback(() => {
+    if (mode === 'wide' || mode === 'deskGroup') goTo('barcaClose')
+  }, [mode, goTo])
+
+  //  keep soccer-ball click mapped to the same Barça zoom
+  const onSoccerClick = onBarcaAreaClick
+
   return (
     <div style={{ height: '100vh', width: '100vw', overflow: 'hidden' }}>
       <Canvas
@@ -195,6 +218,9 @@ export default function Page() {
             onDeskAreaClick={onDeskAreaClick}
             onComputerClick={onComputerClick}
             onFrameClick={onFrameClick}
+            onSnowboardClick={onSnowboardClick}     
+            onSoccerClick={onSoccerClick}           
+            onBarcaAreaClick={onBarcaAreaClick}     
             onPCAnchor={handlePCAnchor}
             pcActive={mode === 'pcClose'}
           />
